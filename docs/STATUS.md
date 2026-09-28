@@ -11,6 +11,8 @@
   listings/searches, tour requests, CRM lead events/notes, RAE client report view, RLS.
 - Production refuses to serve sample data unless `ALLOW_SAMPLE_DATA=true`.
 
+- Cloudflare deploy config (OpenNext adapter; verified building + serving under `wrangler dev`). See `docs/DEPLOY.md`.
+
 ## Blocked on RAE / Bridge
 - Real provider (Bridge RESO Web API), field mapping, 3–6h refresh job. Confirm application status first.
 
@@ -19,6 +21,6 @@
   enforcement in `proxy.ts`, audit-log writes.
 - Favourites, saved searches + alert emails (Resend), tour request persistence + notification.
 - CRM dashboard + intent scoring/notifications; quarterly RAE report job (first business day of each quarter).
-- Map view, Walk/Transit/Bike Score (label as third-party data), WAF/rate limiting/anti-scraping (Cloudflare),
+- Map view, Walk/Transit/Bike Score (label as third-party data), WAF/rate limiting/anti-scraping (Cloudflare dashboard).
   Cloudflare Pages deployment (verify the current Next 16 adapter path).
 - Final domain; legal review of Privacy/Terms.

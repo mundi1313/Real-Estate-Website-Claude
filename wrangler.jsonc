@@ -1,0 +1,22 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"main": ".open-next/worker.js",
+	"name": "edmonton-idx-site",
+	"compatibility_date": "2026-09-01",
+	"compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "edmonton-idx-site"
+		}
+	],
+	// Non-secret defaults. Real secrets: `npx wrangler secret put NAME`.
+	"vars": {
+		// Sample data is allowed on the preview deployment ONLY. Remove once Bridge is live.
+		"ALLOW_SAMPLE_DATA": "true"
+	}
+}
