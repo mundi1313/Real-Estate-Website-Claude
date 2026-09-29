@@ -7,7 +7,14 @@ const subscribe = () => () => {};
 export default function LocalTime({ iso }: { iso: string }) {
   const text = useSyncExternalStore(
     subscribe,
-    () => new Date(iso).toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short", timeZoneName: "short" }),
+    () => new Date(iso).toLocaleString("en-CA", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZoneName: "short",
+    }),
     () => "…",
   );
   return <time dateTime={iso}>{text}</time>;
