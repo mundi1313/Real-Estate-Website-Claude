@@ -1,10 +1,13 @@
 # Accounts & lead capture
 
 ## How it works
-- Visitors browse freely. After they open **3 different listings** (`FREE_LISTING_VIEWS` in `src/lib/auth/rules.ts`)
-  a "Continue Your Home Search" popup asks them to sign up.
-- **Google**: name + email come from Google, then a short step asks for phone + consent.
-- **Email**: first/last name, email, phone, password, consent.
+- Visitors browse freely. After they open **1 listing** (`FREE_LISTING_VIEWS` in `src/lib/auth/rules.ts`; the popup appears
+  on the 2nd different listing) a "Continue Your Home Search" popup asks them to sign up.
+- **No passwords.** **Google**: name + email come from Google, then a short step asks for phone + consent.
+  **Email**: first/last name, email, phone, consent — then we email a one-time sign-in link. Returning users just enter
+  their email to get a new link.
+- **Booking a tour** uses the signed-in profile (name/email/phone are never re-typed); they only pick a date and time.
+  Requests are saved to `tour_requests` and logged as a lead event.
 - Signed-in visitors: each listing they open is recorded on their lead record (`lead_events`).
 - Every register / login / failed login / logout is written to `audit_log` with IP + browser.
 
@@ -16,12 +19,14 @@ verification is skipped, Google is disabled. It switches itself off in productio
 1. supabase.com → New project. Settings → API: copy the Project URL, `anon` key and `service_role` key
    into `.env.local` (see `.env.example`). Keep the service_role key secret.
 2. SQL Editor: run `supabase/migrations/0001_init.sql`, then `0002_signup_flow.sql`.
-3. Authentication → Providers → Email: keep **Confirm email** ON (RAE requires verified emails).
+3. Authentication → Providers → Email: keep **Confirm email** ON.
 4. Authentication → URL Configuration: Site URL `http://localhost:3000`; add Redirect URL `http://localhost:3000/auth/callback`
    (add your real domain later).
-5. Authentication → Email Templates → *Confirm signup*: change the link to
-   `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email` so verification works from any browser.
-6. Restart `npm run dev`. The "Demo mode" banner disappears.
+5. Authentication → Email Templates → edit **both** *Confirm signup* and *Magic Link*: set the link to
+   `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email`.
+6. **Email sending limit:** Supabase's built-in email is capped at a few messages per hour — fine for testing, not for
+   real visitors. Before launch add custom SMTP (e.g. Resend, free tier): Authentication → SMTP Settings.
+7. Restart `npm run dev`. The "Demo mode" banner disappears.
 
 ## Turn on "Continue with Google" (free)
 1. console.cloud.google.com → new project → APIs & Services → OAuth consent screen (External, app name, support email).
@@ -31,11 +36,12 @@ verification is skipped, Google is disabled. It switches itself off in productio
 Only name + email are requested, so Google needs no app review.
 
 ## Before launch
-- **RAE approval of Google sign-in** (no password, so the 90-day password rule can't apply) — ask RAE. To switch Google
-  off, remove the button in `src/components/AuthModal.tsx`.
+- **RAE approval.** The owner chose passwordless sign-in (email link + Google). RAE's checklist (as summarized in
+  `docs/PROJECT_BRIEF.md`) asks for unique usernames/passwords with 90-day expiry and no social-login shortcuts — get RAE to
+  confirm in writing that this flow is acceptable before going live. If not, passwords must be added back.
 - eXp/counsel must approve the consent wording in `src/lib/auth/consent.ts` (CASL). The exact text each person saw is stored
   on their profile.
-- Still to build: forgot-password + 90-day expiry reset flow (login already blocks expired passwords), reCAPTCHA,
-  rate limiting, lead alert emails to Arman, quarterly RAE client-list export (`rae_client_report` view exists).
+- Still to build: reCAPTCHA + rate limiting on the signup/sign-in-link forms, lead + tour-request alert emails to Arman,
+  quarterly RAE client-list export (`rae_client_report` view exists).
 - Cloudflare: Next's `proxy.ts` (session refresh) runs as *experimental* Node middleware on the OpenNext adapter — test
   sign-in on the deployed preview before relying on it. Set the three env vars in the Cloudflare dashboard.

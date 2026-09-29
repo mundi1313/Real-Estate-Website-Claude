@@ -1,5 +1,5 @@
 // Shared (client + server) signup rules.
-export const FREE_LISTING_VIEWS = 3; // unique listings a visitor can open before being asked to sign up
+export const FREE_LISTING_VIEWS = 1; // unique listings a visitor can open before being asked to sign up
 export const TERMS_VERSION = "2026-09-draft";
 
 export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim());
@@ -11,8 +11,3 @@ export function normalizePhone(s: string): string | null {
   return /^[2-9]\d{2}[2-9]\d{6}$/.test(ten) ? `+1${ten}` : null;
 }
 
-export function passwordProblem(p: string): string | null {
-  if (p.length < 10) return "Password must be at least 10 characters.";
-  if (!/[A-Za-z]/.test(p) || !/\d/.test(p)) return "Password must include a letter and a number.";
-  return null;
-}

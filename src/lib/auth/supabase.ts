@@ -44,12 +44,14 @@ async function origin() {
 export const supabaseBackend: AuthBackend = {
   mode: "supabase",
 
+  // Passwordless: Supabase emails a one-time sign-in link. Creating the user here (with their details as
+  // metadata) lets the DB trigger build the profile; the account is confirmed when they open the link.
   async signUp(i, ctx) {
     const sb = await userClient();
-    const { data, error } = await sb.auth.signUp({
+    const { data, error } = await sb.auth.signInWithOtp({
       email: i.email.trim().toLowerCase(),
-      password: i.password,
       options: {
+        shouldCreateUser: true,
         emailRedirectTo: `${await origin()}/auth/callback`,
         data: {
           first_name: i.firstName, last_name: i.lastName, phone: i.phone,
@@ -58,28 +60,21 @@ export const supabaseBackend: AuthBackend = {
         },
       },
     });
-    if (error) return { ok: false, error: error.message };
-    await audit(data.user?.id ?? null, "register", ctx);
-    if (data.user) await admin().from("lead_events").insert({ user_id: data.user.id, event_type: "signup" });
-    return { ok: true, needsVerification: !data.session }; // email must be verified before the account is active
+    void data;
+    if (error) return { ok: false, error: "We couldn't send your sign-in link. Please try again in a moment." };
+    await audit(null, "register_link_sent", ctx, { email: i.email.trim().toLowerCase() });
+    return { ok: true, needsVerification: true };
   },
 
-  async signIn(email, password, ctx) {
+  async signIn(email, ctx) {
     const sb = await userClient();
-    const { data, error } = await sb.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
-    if (error || !data.user) {
-      await audit(null, "login_failed", ctx, { email });
-      return { ok: false, error: error?.message === "Email not confirmed" ? "Please verify your email first — check your inbox." : "Incorrect email or password." };
-    }
-    const { data: p } = await admin().from("profiles").select("password_expires_at").eq("id", data.user.id).maybeSingle();
-    if (p && new Date(p.password_expires_at) < new Date()) {
-      await sb.auth.signOut();
-      await audit(data.user.id, "login_blocked_password_expired", ctx);
-      return { ok: false, error: "Your password has expired (every 90 days). Please reset it via “Forgot password”." };
-    }
-    await audit(data.user.id, "login", ctx);
-    await admin().from("lead_events").insert({ user_id: data.user.id, event_type: "login" });
-    return { ok: true };
+    const { error } = await sb.auth.signInWithOtp({
+      email: email.trim().toLowerCase(),
+      options: { shouldCreateUser: false, emailRedirectTo: `${await origin()}/auth/callback` },
+    });
+    // Same answer either way, so the form can't be used to discover who has an account.
+    await audit(null, error ? "login_link_failed" : "login_link_sent", ctx, { email: email.trim().toLowerCase() });
+    return { ok: true, needsVerification: true };
   },
 
   async signOut(ctx) {
@@ -122,6 +117,23 @@ export const supabaseBackend: AuthBackend = {
       options: { redirectTo: `${await origin()}/auth/callback?next=${encodeURIComponent(next)}` },
     });
     return error || !data.url ? { ok: false, error: "Google sign-in is unavailable right now." } : { ok: true, url: data.url };
+  },
+
+  async createTour(i, ctx) {
+    const sb = await userClient();
+    const { data } = await sb.auth.getUser();
+    if (!data.user) return { ok: false, error: "Please sign in to book a showing." };
+    const { data: p } = await admin().from("profiles").select("first_name,last_name,phone,profile_complete").eq("id", data.user.id).maybeSingle();
+    if (!p?.profile_complete) return { ok: false, error: "Please finish your profile first." };
+    const { error } = await admin().from("tour_requests").insert({
+      user_id: data.user.id, mls_number: i.mls, name: `${p.first_name} ${p.last_name}`.trim(),
+      email: data.user.email, phone: p.phone, preferred_times: i.preferredTimes, message: i.message,
+    });
+    if (error) return { ok: false, error: "Could not send your request. Please try again." };
+    await admin().from("lead_events").insert({ user_id: data.user.id, event_type: "tour_requested", mls_number: i.mls });
+    await audit(data.user.id, "tour_requested", ctx, { mls: i.mls });
+    // TODO: email Arman (Resend) so a tour request is never missed.
+    return { ok: true };
   },
 
   async track(type, mls) {

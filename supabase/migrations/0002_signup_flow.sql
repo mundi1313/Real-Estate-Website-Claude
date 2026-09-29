@@ -1,4 +1,6 @@
--- Signup flow: Google or email signup, phone + consent captured, profile auto-created by trigger.
+-- Signup flow: Google or emailed-link signup (no passwords), phone + consent captured, profile auto-created by trigger.
+
+alter table public.tour_requests add column message text;
 
 alter table public.profiles
   add column first_name text,

@@ -13,14 +13,14 @@
 
 - Cloudflare deploy config (OpenNext adapter; verified building + serving under `wrangler dev`). See `docs/DEPLOY.md`.
 
-- Signup/login popup (Google + email), 3-listing gate, audit log, lead events, demo backend + Supabase backend. See `docs/AUTH_SETUP.md`.
+- Passwordless signup/login popup (Google + emailed link), gate after 1 listing, one-tap tour booking from the profile, audit log, lead events, demo backend + Supabase backend. See `docs/AUTH_SETUP.md`.
 - Modern redesign (home, search, listing detail, mobile).
 
 ## Blocked on RAE / Bridge
 - Real provider (Bridge RESO Web API), field mapping, 3–6h refresh job. Confirm application status first.
 
 ## TODO
-- Connect real Supabase (keys + run migrations), Google provider, forgot-password + 90-day reset flow.
+- Connect real Supabase (keys + run migrations + SMTP), Google provider; get RAE to confirm passwordless is acceptable.
 - Favourites, saved searches + alert emails (Resend), tour request persistence + notification.
 - CRM dashboard + intent scoring/notifications; quarterly RAE report job (first business day of each quarter).
 - Map view, Walk/Transit/Bike Score (label as third-party data), WAF/rate limiting/anti-scraping (Cloudflare dashboard).

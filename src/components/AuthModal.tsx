@@ -3,7 +3,7 @@ import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { completeProfileAction, googleAction, signInAction, signUpAction } from "@/app/auth/actions";
 import { MARKETING_TEXT, TERMS_TEXT } from "@/lib/auth/consent";
-import { isEmail, passwordProblem } from "@/lib/auth/rules";
+import { isEmail } from "@/lib/auth/rules";
 import type { AuthUser } from "@/lib/auth/types";
 
 export type Step = "start" | "details" | "login" | "verify" | "complete";
@@ -26,7 +26,8 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
   const [pending, start] = useTransition();
   const [error, setError] = useState(notice);
   const [email, setEmail] = useState("");
-  const [f, setF] = useState({ firstName: user?.firstName ?? "", lastName: user?.lastName ?? "", phone: "", password: "", website: "" });
+  const [sent, setSent] = useState<"signup" | "login">("signup");
+  const [f, setF] = useState({ firstName: user?.firstName ?? "", lastName: user?.lastName ?? "", phone: "", website: "" });
   const [terms, setTerms] = useState(false);
   const [marketing, setMarketing] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
@@ -65,7 +66,7 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
         <div className="px-7 pb-7 pt-8">
           <h2 className="pr-6 text-center text-2xl font-semibold">{title}</h2>
           {step === "start" && <p className="mt-1 text-center text-sm text-ink-soft">Free account — save homes, book tours and get updates.</p>}
-          {mode === "demo" && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-center text-[11px] text-amber-800">Demo mode: accounts are stored locally and email verification is skipped.</p>}
+          {mode === "demo" && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-center text-[11px] text-amber-800">Demo mode: accounts are stored locally and sign-in links are skipped.</p>}
           {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
           {step === "start" && (
@@ -86,9 +87,7 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
           {step === "details" && (
             <form className="mt-6 space-y-3" onSubmit={(e) => {
               e.preventDefault();
-              const pw = passwordProblem(f.password);
-              if (pw) return setError(pw);
-              run(() => signUpAction({ email, ...f, acceptTerms: terms, marketingConsent: marketing }), (r) => (r.needsVerification ? go("verify") : onDone()));
+              run(() => signUpAction({ email, ...f, acceptTerms: terms, marketingConsent: marketing }), (r) => { if (r.needsVerification) { setSent("signup"); go("verify"); } else onDone(); });
             }}>
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-xs font-medium">First name *<input value={f.firstName} onChange={set("firstName")} className="field mt-1" autoComplete="given-name" required /></label>
@@ -96,7 +95,6 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
               </div>
               <label className="block text-xs font-medium">Email *<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="field mt-1" autoComplete="email" required /></label>
               <label className="block text-xs font-medium">Phone *<input type="tel" value={f.phone} onChange={set("phone")} placeholder="(780) 555-0123" className="field mt-1" autoComplete="tel" required /></label>
-              <label className="block text-xs font-medium">Password *<input type="password" value={f.password} onChange={set("password")} placeholder="At least 10 characters, with a number" className="field mt-1" autoComplete="new-password" required /></label>
               <input name="website" value={f.website} onChange={set("website")} tabIndex={-1} autoComplete="off" aria-hidden className="absolute -left-[9999px] h-0 w-0 opacity-0" />
               {consent}
               <button disabled={pending} className="btn btn-accent w-full disabled:opacity-60">{pending ? "Creating account…" : "Create my account"}</button>
@@ -105,19 +103,19 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
           )}
 
           {step === "login" && (
-            <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); run(() => signInAction({ email, password: f.password }), onDone); }}>
+            <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); run(() => signInAction({ email }), (r) => { if (r.needsVerification) { setSent("login"); go("verify"); } else onDone(); }); }}>
+              <p className="text-center text-sm text-ink-soft">Enter your email and we&apos;ll send you a link to sign in — no password needed.</p>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="field" autoComplete="email" required />
-              <input type="password" value={f.password} onChange={set("password")} placeholder="Password" className="field" autoComplete="current-password" required />
-              <button disabled={pending} className="btn btn-brand w-full disabled:opacity-60">{pending ? "Signing in…" : "Log in"}</button>
+              <button disabled={pending} className="btn btn-brand w-full disabled:opacity-60">{pending ? "Sending…" : "Email me a sign-in link"}</button>
               <p className="text-center text-sm text-ink-soft">New here? <button type="button" onClick={() => go("start")} className="font-semibold text-brand underline">Create an account</button></p>
             </form>
           )}
 
           {step === "verify" && (
             <div className="mt-6 space-y-3 text-center text-sm text-ink-soft">
-              <p>We sent a verification link to <b className="text-ink">{email}</b>.</p>
-              <p>Open it to activate your account, then come back and log in.</p>
-              <button onClick={() => go("login")} className="btn btn-brand mt-2">Go to log in</button>
+              <p>We sent a {sent === "signup" ? "verification" : "sign-in"} link to <b className="text-ink">{email}</b>.</p>
+              <p>Open it on this device to {sent === "signup" ? "activate your account and sign in" : "sign in"}. If you don&apos;t see it, check your spam folder.</p>
+              <button onClick={onClose} className="btn btn-brand mt-2">Got it</button>
             </div>
           )}
 
