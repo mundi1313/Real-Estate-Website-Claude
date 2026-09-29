@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { site } from "@/lib/site";
+import AuthButton from "./AuthButton";
 
 export default function SiteHeader() {
   return (
@@ -16,7 +17,10 @@ export default function SiteHeader() {
           <Link href="/#neighbourhoods" className="hover:text-ink">Neighbourhoods</Link>
           <Link href="/#about" className="hover:text-ink">About Arman</Link>
         </nav>
-        <Link href="/search" className="btn btn-brand !py-2 whitespace-nowrap">Search<span className="hidden sm:inline"> homes</span></Link>
+        <div className="flex items-center gap-2">
+          <AuthButton />
+          <Link href="/search" className="btn btn-brand !py-2 whitespace-nowrap">Search<span className="hidden sm:inline"> homes</span></Link>
+        </div>
       </div>
     </header>
   );

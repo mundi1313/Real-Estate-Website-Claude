@@ -13,12 +13,14 @@
 
 - Cloudflare deploy config (OpenNext adapter; verified building + serving under `wrangler dev`). See `docs/DEPLOY.md`.
 
+- Signup/login popup (Google + email), 3-listing gate, audit log, lead events, demo backend + Supabase backend. See `docs/AUTH_SETUP.md`.
+- Modern redesign (home, search, listing detail, mobile).
+
 ## Blocked on RAE / Bridge
 - Real provider (Bridge RESO Web API), field mapping, 3–6h refresh job. Confirm application status first.
 
 ## TODO
-- Supabase Auth: register (name/phone/email/terms), email verification, no persistent sessions, 90-day expiry
-  enforcement in `proxy.ts`, audit-log writes.
+- Connect real Supabase (keys + run migrations), Google provider, forgot-password + 90-day reset flow.
 - Favourites, saved searches + alert emails (Resend), tour request persistence + notification.
 - CRM dashboard + intent scoring/notifications; quarterly RAE report job (first business day of each quarter).
 - Map view, Walk/Transit/Bike Score (label as third-party data), WAF/rate limiting/anti-scraping (Cloudflare dashboard).

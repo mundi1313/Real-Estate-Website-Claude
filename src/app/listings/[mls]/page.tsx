@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import AuthGate from "@/components/AuthGate";
 import ListingCard from "@/components/ListingCard";
 import MlsNotice from "@/components/MlsNotice";
 import MortgageCalculator from "@/components/MortgageCalculator";
@@ -25,6 +26,7 @@ export default async function ListingPage({ params }: { params: Promise<{ mls: s
   ];
   return (
     <>
+      <AuthGate mls={l.mlsNumber} />
       <div className="container-x py-6">
         <Link href="/search" className="text-sm text-ink-soft hover:text-ink">← Back to search</Link>
         <div className="mt-4 grid gap-2 overflow-hidden rounded-3xl md:h-[26rem] md:grid-cols-[2fr_1fr] md:grid-rows-2">
