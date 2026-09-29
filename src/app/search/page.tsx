@@ -30,38 +30,54 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     u.set("page", String(page));
     return `/search?${u}`;
   };
-  const field = "rounded border px-2 py-1 text-sm";
   return (
     <>
-      <form className="mb-6 flex flex-wrap gap-2 rounded-lg border bg-white p-3">
-        <input name="q" defaultValue={filters.q} placeholder="Address, city, or MLS® #" className={`${field} w-56`} />
-        <input name="minPrice" type="number" defaultValue={filters.minPrice} placeholder="Min price" className={`${field} w-28`} />
-        <input name="maxPrice" type="number" defaultValue={filters.maxPrice} placeholder="Max price" className={`${field} w-28`} />
-        <select name="beds" defaultValue={filters.beds ?? ""} className={field}>
-          <option value="">Beds</option>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}+</option>)}
-        </select>
-        <select name="baths" defaultValue={filters.baths ?? ""} className={field}>
-          <option value="">Baths</option>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}+</option>)}
-        </select>
-        <select name="type" defaultValue={filters.type ?? ""} className={field}>
-          <option value="">Any type</option>{["Detached", "Condo", "Townhouse", "Duplex"].map((t) => <option key={t}>{t}</option>)}
-        </select>
-        <select name="sort" defaultValue={filters.sort ?? ""} className={field}>
-          <option value="">Sort</option><option value="price-asc">Price ↑</option><option value="price-desc">Price ↓</option>
-        </select>
-        <button className="rounded bg-blue-700 px-4 py-1 text-sm text-white">Search</button>
-      </form>
-      <p className="mb-3 text-sm text-neutral-600">{res.total} homes · page {res.page} of {res.pageCount}</p>
-      {/* TODO: map view (Google Maps / Mapbox) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {res.listings.map((l) => <ListingCard key={l.mlsNumber} l={l} />)}
+      <section className="border-b border-line bg-white">
+        <div className="container-x py-8">
+          <h1 className="text-3xl font-semibold">Homes for sale in Edmonton &amp; area</h1>
+          <form className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-[1.6fr_1fr_1fr_.8fr_.8fr_1fr_1fr_auto]">
+            <input name="q" defaultValue={filters.q} placeholder="Address, city, or MLS® #" className="field" aria-label="Search" />
+            <input name="minPrice" type="number" defaultValue={filters.minPrice} placeholder="Min price" className="field" aria-label="Min price" />
+            <input name="maxPrice" type="number" defaultValue={filters.maxPrice} placeholder="Max price" className="field" aria-label="Max price" />
+            <select name="beds" defaultValue={filters.beds ?? ""} className="field" aria-label="Bedrooms">
+              <option value="">Beds</option>{[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}+</option>)}
+            </select>
+            <select name="baths" defaultValue={filters.baths ?? ""} className="field" aria-label="Bathrooms">
+              <option value="">Baths</option>{[1, 2, 3].map((n) => <option key={n} value={n}>{n}+</option>)}
+            </select>
+            <select name="type" defaultValue={filters.type ?? ""} className="field" aria-label="Property type">
+              <option value="">Any type</option>{["Detached", "Condo", "Townhouse", "Duplex"].map((t) => <option key={t}>{t}</option>)}
+            </select>
+            <select name="sort" defaultValue={filters.sort ?? ""} className="field" aria-label="Sort">
+              <option value="">Sort by</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option>
+            </select>
+            <button className="btn btn-accent">Search</button>
+          </form>
+        </div>
+      </section>
+      <div className="container-x py-8">
+        <p className="mb-5 text-sm text-ink-soft">
+          <b className="text-ink">{res.total}</b> homes · page {res.page} of {res.pageCount}
+        </p>
+        {/* TODO: map view (Google Maps / Mapbox) */}
+        {res.listings.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-line bg-white p-12 text-center">
+            <p className="font-display text-xl font-semibold">No homes match those filters</p>
+            <p className="mt-1 text-sm text-ink-soft">Try widening the price range or clearing a filter.</p>
+            <Link href="/search" className="btn btn-brand mt-5">Clear filters</Link>
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {res.listings.map((l) => <ListingCard key={l.mlsNumber} l={l} />)}
+          </div>
+        )}
+        {res.pageCount > 1 && (
+          <nav className="mt-8 flex justify-center gap-3 text-sm">
+            {res.page > 1 && <Link href={qs(res.page - 1)} className="btn border border-line bg-white">← Previous</Link>}
+            {res.page < res.pageCount && <Link href={qs(res.page + 1)} className="btn border border-line bg-white">Next →</Link>}
+          </nav>
+        )}
       </div>
-      {res.pageCount > 1 && (
-        <nav className="mt-6 flex justify-center gap-4 text-sm">
-          {res.page > 1 && <Link href={qs(res.page - 1)}>← Previous</Link>}
-          {res.page < res.pageCount && <Link href={qs(res.page + 1)}>Next →</Link>}
-        </nav>
-      )}
       <MlsNotice lastUpdated={res.lastUpdated} />
     </>
   );
