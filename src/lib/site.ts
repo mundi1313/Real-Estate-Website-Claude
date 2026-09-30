@@ -1,9 +1,8 @@
 // Central site config. Every page pulls agent/brokerage identity from here
 // so the RECA-required name + "eXp Realty" can never be omitted from a template.
 export const site = {
-  // Placeholder until the final domain is chosen (must be generic, no REALTOR/MLS,
-  // no Associates/Brokerage/Company/Corp/Inc/Ltd).
-  brand: "Edmonton Urban Living",
+  // Domain: keystoedmonton.ca (generic geo-brand: no REALTOR/MLS, none of Associates/Brokerage/Company/Corp/Inc/Ltd).
+  brand: "Keys to Edmonton",
   agent: {
     name: "Arman Mundi",
     title: "REALTOR®",

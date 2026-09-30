@@ -14,9 +14,17 @@
 			"service": "edmonton-idx-site"
 		}
 	],
+	// keystoedmonton.ca must be ACTIVE on Cloudflare (nameservers switched) before `npm run deploy`, or this fails.
+	"routes": [
+		{ "pattern": "keystoedmonton.ca", "custom_domain": true },
+		{ "pattern": "www.keystoedmonton.ca", "custom_domain": true }
+	],
 	// Non-secret defaults. Real secrets: `npx wrangler secret put NAME`.
 	"vars": {
 		// Sample data is allowed on the preview deployment ONLY. Remove once Bridge is live.
-		"ALLOW_SAMPLE_DATA": "true"
+		"ALLOW_SAMPLE_DATA": "true",
+		// Fail-closed gate: while this is set, the site shows only a holding page unless the SITE_PASSWORD secret exists.
+		// Delete this line (and the SITE_PASSWORD secret) when you are ready to go public.
+		"REQUIRE_SITE_PASSWORD": "true"
 	}
 }

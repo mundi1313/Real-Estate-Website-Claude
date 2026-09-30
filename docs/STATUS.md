@@ -20,6 +20,8 @@
 
 - Email alerts to Arman (Resend): new lead, showing request, hot-lead crossing. Fails safe. Tested against a mock Resend server.
 
+- Domain keystoedmonton.ca; site-wide password gate (fail-closed, noindex), Cloudflare custom-domain routes, `deploy:secrets` uploader. See `docs/DEPLOY.md`.
+
 ## Blocked on RAE / Bridge
 - Real provider (Bridge RESO Web API), field mapping, 3–6h refresh job. Confirm application status first.
 
