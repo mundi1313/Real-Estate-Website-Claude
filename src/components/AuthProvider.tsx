@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AuthModal, { type Step } from "./AuthModal";
 import type { AuthUser } from "@/lib/auth/types";
@@ -13,7 +13,8 @@ export default function AuthProvider({ user, mode, isAdmin = false, children }: 
   const [step, setStep] = useState<Step | null>(null);
   const [notice, setNotice] = useState("");
   const open = useCallback((s: Step = "start") => setStep(s), []);
-  const close = useCallback(() => setStep(null), []);
+  const dismissed = useRef(false);
+  const dismiss = useCallback(() => { dismissed.current = true; setStep(null); }, []); // the visitor closed it: stop asking until reload
 
   // Returning from Google / the email-verification link.
   useEffect(() => {
@@ -28,14 +29,19 @@ export default function AuthProvider({ user, mode, isAdmin = false, children }: 
     else if (user && !user.profileComplete) setStep("complete");
   }, [user]);
 
+  // Signed in but profile incomplete (e.g. new email, Google): ask for the missing details.
+  useEffect(() => {
+    if (user && !user.profileComplete && !dismissed.current) setStep((s) => s ?? "complete");
+  }, [user]);
+
   const value = useMemo(() => ({ user, isAdmin, open }), [user, isAdmin, open]);
   return (
     <AuthCtx.Provider value={value}>
       {children}
       {step && (
         <AuthModal
-          step={step} setStep={setStep} onClose={close} mode={mode} notice={notice} user={user}
-          onDone={() => { close(); router.refresh(); }}
+          step={step} setStep={setStep} onClose={dismiss} mode={mode} notice={notice} user={user}
+          onDone={() => { setStep(null); router.refresh(); }}
         />
       )}
     </AuthCtx.Provider>

@@ -104,7 +104,7 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
 
           {step === "login" && (
             <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); run(() => signInAction({ email }), (r) => { if (r.needsVerification) { setSent("login"); go("verify"); } else onDone(); }); }}>
-              <p className="text-center text-sm text-ink-soft">Enter your email and we&apos;ll send you a link to sign in — no password needed.</p>
+              <p className="text-center text-sm text-ink-soft">Enter your email and we&apos;ll send you a link to sign in — no password needed. New here? We&apos;ll set up your free account when you open the link.</p>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="field" autoComplete="email" required />
               <button disabled={pending} className="btn btn-brand w-full disabled:opacity-60">{pending ? "Sending…" : "Email me a sign-in link"}</button>
               <p className="text-center text-sm text-ink-soft">New here? <button type="button" onClick={() => go("start")} className="font-semibold text-brand underline">Create an account</button></p>
@@ -120,8 +120,14 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
           )}
 
           {step === "complete" && (
-            <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); run(() => completeProfileAction({ phone: f.phone, acceptTerms: terms, marketingConsent: marketing }), onDone); }}>
-              <p className="text-center text-sm text-ink-soft">Welcome{user?.firstName ? `, ${user.firstName}` : ""}! We just need your phone number so Arman can reach you about tours.</p>
+            <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); run(() => completeProfileAction({ phone: f.phone, acceptTerms: terms, marketingConsent: marketing, firstName: f.firstName, lastName: f.lastName }), onDone); }}>
+              <p className="text-center text-sm text-ink-soft">Welcome{user?.firstName ? `, ${user.firstName}` : ""}! {user?.firstName ? "We just need your phone number" : "We just need your name and phone number"} so Arman can reach you about tours.</p>
+              {!user?.firstName && (
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-xs font-medium">First name *<input value={f.firstName} onChange={set("firstName")} className="field mt-1" autoComplete="given-name" required /></label>
+                  <label className="text-xs font-medium">Last name *<input value={f.lastName} onChange={set("lastName")} className="field mt-1" autoComplete="family-name" required /></label>
+                </div>
+              )}
               <label className="block text-xs font-medium">Phone *<input type="tel" value={f.phone} onChange={set("phone")} placeholder="(780) 555-0123" className="field mt-1" autoComplete="tel" required /></label>
               {consent}
               <button disabled={pending} className="btn btn-accent w-full disabled:opacity-60">{pending ? "Saving…" : "Continue"}</button>

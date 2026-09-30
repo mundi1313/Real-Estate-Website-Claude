@@ -5,7 +5,8 @@
   on the 2nd different listing) a "Continue Your Home Search" popup asks them to sign up.
 - **No passwords.** **Google**: name + email come from Google, then a short step asks for phone + consent.
   **Email**: first/last name, email, phone, consent — then we email a one-time sign-in link. Returning users just enter
-  their email to get a new link.
+  their email to get a new link. If the email is new, an account is created and the popup asks for name, phone and consent as soon
+  as the link is opened (or right away in demo mode) — there is no dead end for people who pick "Log in" by mistake.
 - **Booking a tour** uses the signed-in profile (name/email/phone are never re-typed); they only pick a date and time.
   Requests are saved to `tour_requests` and logged as a lead event.
 - Signed-in visitors: each listing they open is recorded on their lead record (`lead_events`).

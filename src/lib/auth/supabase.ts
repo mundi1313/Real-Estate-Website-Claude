@@ -74,7 +74,7 @@ export const supabaseBackend: AuthBackend = {
     const sb = await userClient();
     const { error } = await sb.auth.signInWithOtp({
       email: email.trim().toLowerCase(),
-      options: { shouldCreateUser: false, emailRedirectTo: `${await origin()}/auth/callback` },
+      options: { shouldCreateUser: true, emailRedirectTo: `${await origin()}/auth/callback` }, // new email => account is created; name/phone/consent are collected right after the link is opened
     });
     if (error) console.error("[auth] sign-in link failed:", error.message); // terminal only; the visitor sees the same message either way
     // Same answer either way, so the form can't be used to discover who has an account.
@@ -108,6 +108,7 @@ export const supabaseBackend: AuthBackend = {
     const now = new Date().toISOString();
     const { error } = await admin().from("profiles").update({
       phone: i.phone, terms_accepted_at: now, terms_version: TERMS_VERSION,
+      ...(i.firstName && i.lastName ? { first_name: i.firstName, last_name: i.lastName, full_name: `${i.firstName} ${i.lastName}` } : {}),
       ...(i.marketingConsent ? { marketing_consent_at: now, marketing_consent_text: MARKETING_TEXT } : {}),
     }).eq("id", data.user.id);
     if (error) return { ok: false, error: "Could not save your details. Please try again." };

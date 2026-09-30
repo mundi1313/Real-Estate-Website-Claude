@@ -36,11 +36,15 @@ export async function signOutAction(): Promise<void> {
   revalidatePath("/", "layout");
 }
 
-export async function completeProfileAction(f: { phone: string; acceptTerms: boolean; marketingConsent: boolean }): Promise<AuthResult> {
+export async function completeProfileAction(f: { phone: string; acceptTerms: boolean; marketingConsent: boolean; firstName?: string; lastName?: string }): Promise<AuthResult> {
+  const user = await auth.getUser();
+  if (!user) return fail("Please sign in first.");
   const phone = normalizePhone(str(f.phone));
   if (!phone) return fail("Please enter a valid 10-digit phone number.");
+  const firstName = str(f.firstName), lastName = str(f.lastName);
+  if (!user.firstName && (!firstName || !lastName)) return fail("Please enter your first and last name.");
   if (!f.acceptTerms) return fail("Please agree to the Terms of Use and Privacy Policy to continue.");
-  const res = await auth.completeProfile({ phone, marketingConsent: !!f.marketingConsent }, await requestCtx());
+  const res = await auth.completeProfile({ phone, marketingConsent: !!f.marketingConsent, ...(user.firstName ? {} : { firstName, lastName }) }, await requestCtx());
   revalidatePath("/", "layout");
   return res;
 }

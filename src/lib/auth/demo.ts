@@ -68,7 +68,13 @@ export const demoBackend: AuthBackend = {
     if (off()) return UNAVAILABLE;
     const db = load();
     const u = db.users.find((x) => x.email === email.trim().toLowerCase());
-    if (!u) { audit(db, null, "login_failed", ctx); save(db); return { ok: false, error: "No account with that email yet — please sign up first." }; }
+    if (!u) { // unknown email: create a bare account; name/phone/consent are collected next (mirrors the emailed-link flow)
+      const now = new Date().toISOString();
+      const created: DemoUserRec = { id: randomBytes(8).toString("hex"), email: email.trim().toLowerCase(), firstName: "", lastName: "", phone: null, termsAt: null, marketingAt: null, marketingText: null, createdAt: now };
+      db.users.push(created); db.events.push({ userId: created.id, type: "signup", at: now }); audit(db, created.id, "register", ctx); save(db);
+      await session(created.id);
+      return { ok: true };
+    }
     audit(db, u.id, "login", ctx); save(db);
     await session(u.id);
     return { ok: true };
@@ -96,6 +102,7 @@ export const demoBackend: AuthBackend = {
     if (!u) return { ok: false, error: "Please sign in first." };
     const now = new Date().toISOString();
     u.phone = i.phone; u.termsAt = now;
+    if (i.firstName && i.lastName) { u.firstName = i.firstName; u.lastName = i.lastName; }
     if (i.marketingConsent) { u.marketingAt = now; u.marketingText = MARKETING_TEXT; }
     audit(db, u.id, "profile_completed", ctx); save(db);
     return { ok: true };

@@ -28,7 +28,7 @@ export interface AuthBackend {
   signIn(email: string, ctx: RequestCtx): Promise<AuthResult>;
   signOut(ctx: RequestCtx): Promise<void>;
   getUser(): Promise<AuthUser | null>;
-  completeProfile(i: { phone: string; marketingConsent: boolean }, ctx: RequestCtx): Promise<AuthResult>;
+  completeProfile(i: { phone: string; marketingConsent: boolean; firstName?: string; lastName?: string }, ctx: RequestCtx): Promise<AuthResult>;
   startGoogle(next: string): Promise<AuthResult>;
   createTour(i: TourInput, ctx: RequestCtx): Promise<AuthResult>;
   track(type: "listing_view" | "tour_requested", mls: string | null): Promise<void>;
