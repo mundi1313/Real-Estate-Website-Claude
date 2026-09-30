@@ -14,6 +14,8 @@
 			"service": "edmonton-idx-site"
 		}
 	],
+	// Also serve from the free Cloudflare address (edmonton-idx-site.<your-subdomain>.workers.dev) — handy for testing. The password gate protects it too.
+	"workers_dev": true,
 	// keystoedmonton.ca must be ACTIVE on Cloudflare (nameservers switched) before `npm run deploy`, or this fails.
 	"routes": [
 		{ "pattern": "keystoedmonton.ca", "custom_domain": true },
