@@ -62,3 +62,11 @@ Only name + email are requested, so Google needs no app review.
 - **Try it full of data (demo mode only):** `npm run seed:demo` adds 12 fictional leads; `npm run seed:demo -- --clear` removes them.
 - **Lead temperature** (Hot / Warm / Cool) is a points score — the rules are at the top of `src/lib/crm/score.ts`.
 - **Not built yet:** email/SMS alerts to you, and bulk actions.
+
+## Email alerts to you
+Set in `.env.local` (and later in Cloudflare): `RESEND_API_KEY`, `ALERT_TO_EMAIL` (defaults to the first `ADMIN_EMAILS`),
+`ALERT_FROM`, and `SITE_URL`. You get an email for: a **new lead**, a **showing request** (with the visitor's note and a link to
+their profile), and a lead **turning hot** (sent once, at the moment their score crosses the line). With no key set, alerts are
+just printed in the terminal. A failing email service never affects visitors (4-second limit, errors are only logged).
+Until you verify your own domain in Resend, the test sender `onboarding@resend.dev` only delivers to the email you signed up to
+Resend with. After verifying a domain, set `ALERT_FROM="Leads <alerts@yourdomain.ca>"`.
