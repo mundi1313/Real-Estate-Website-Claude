@@ -22,10 +22,13 @@ verification is skipped, Google is disabled. It switches itself off in productio
 3. Authentication → Providers → Email: keep **Confirm email** ON.
 4. Authentication → URL Configuration: Site URL `http://localhost:3000`; add Redirect URL `http://localhost:3000/auth/callback`
    (add your real domain later).
-5. Authentication → Email Templates → edit **both** *Confirm signup* and *Magic Link*: set the link to
-   `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email`.
-6. **Email sending limit:** Supabase's built-in email is capped at a few messages per hour — fine for testing, not for
-   real visitors. Before launch add custom SMTP (e.g. Resend, free tier): Authentication → SMTP Settings.
+5. **Email templates: leave the defaults for now.** Supabase only allows template edits once custom SMTP is set up. The default
+   link works when opened in the *same browser* used to sign up (PKCE `?code=`, handled in `/auth/callback`). Before launch, set
+   up custom SMTP (e.g. Resend), then change both *Confirm signup* and *Magic Link* links to
+   `{{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=email` so links also work from another device (the callback
+   already supports `token_hash`).
+6. **Email sending limit:** with the built-in sender, mail only reaches your own Supabase team addresses and is capped at a
+   few messages per hour — fine for testing, not for real visitors. Before launch add custom SMTP: Authentication → Emails → SMTP Settings.
 7. Restart `npm run dev`. The "Demo mode" banner disappears.
 
 ## Turn on "Continue with Google" (free)
