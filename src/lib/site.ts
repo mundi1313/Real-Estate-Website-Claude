@@ -16,5 +16,4 @@ export const site = {
   maxListingsTotal: 1500,
   pageSize: 100,
   maxDataAgeHours: 24,
-  passwordMaxAgeDays: 90,
 } as const;

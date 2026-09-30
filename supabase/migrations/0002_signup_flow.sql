@@ -24,9 +24,9 @@ create function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare
   meta jsonb := coalesce(new.raw_user_meta_data, '{}'::jsonb);
-  full text := coalesce(meta->>'full_name', meta->>'name', '');
-  fn text := coalesce(meta->>'first_name', nullif(split_part(full, ' ', 1), ''));
-  ln text := coalesce(meta->>'last_name', nullif(regexp_replace(full, '^\S+\s*', ''), ''));
+  display_name text := coalesce(meta->>'full_name', meta->>'name', '');
+  fn text := coalesce(meta->>'first_name', nullif(split_part(display_name, ' ', 1), ''));
+  ln text := coalesce(meta->>'last_name', nullif(regexp_replace(display_name, '^\S+\s*', ''), ''));
 begin
   insert into public.profiles (id, full_name, first_name, last_name, phone, username, signup_source,
     terms_accepted_at, terms_version, marketing_consent_at, marketing_consent_text)

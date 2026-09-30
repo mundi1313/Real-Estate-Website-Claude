@@ -1,5 +1,6 @@
 -- Personal IDX site schema. Single-agent (no multi-tenancy).
 -- Auth users live in Supabase's auth.users; `profiles` extends them.
+-- Sign-in is passwordless (emailed link / Google), so there are no password columns here.
 
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -8,9 +9,7 @@ create table public.profiles (
   username text not null unique,
   terms_accepted_at timestamptz not null,
   terms_version text not null,
-  password_changed_at timestamptz not null default now(),   -- expire after 90 days
-  password_expires_at timestamptz generated always as (password_changed_at + interval '90 days') stored,
-  deactivated_at timestamptz,                                -- keep record >=180 days after expiry
+  deactivated_at timestamptz,                                -- keep record >=180 days after deactivation
   created_at timestamptz not null default now()
 );
 
