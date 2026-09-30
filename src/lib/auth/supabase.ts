@@ -61,7 +61,11 @@ export const supabaseBackend: AuthBackend = {
       },
     });
     void data;
-    if (error) return { ok: false, error: "We couldn't send your sign-in link. Please try again in a moment." };
+    if (error) {
+      console.error("[auth] sign-up link failed:", error.message); // visible in the terminal running the site
+      const limited = /rate limit|too many|security purposes/i.test(error.message);
+      return { ok: false, error: limited ? "Too many emails were requested. Please wait a few minutes and try again." : "We couldn't send your sign-in link. Please try again in a moment." };
+    }
     await audit(null, "register_link_sent", ctx, { email: i.email.trim().toLowerCase() });
     return { ok: true, needsVerification: true };
   },
@@ -72,6 +76,7 @@ export const supabaseBackend: AuthBackend = {
       email: email.trim().toLowerCase(),
       options: { shouldCreateUser: false, emailRedirectTo: `${await origin()}/auth/callback` },
     });
+    if (error) console.error("[auth] sign-in link failed:", error.message); // terminal only; the visitor sees the same message either way
     // Same answer either way, so the form can't be used to discover who has an account.
     await audit(null, error ? "login_link_failed" : "login_link_sent", ctx, { email: email.trim().toLowerCase() });
     return { ok: true, needsVerification: true };
