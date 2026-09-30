@@ -46,7 +46,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       {score.reasons.length > 0 && <p className="mt-2 text-sm text-ink-soft">Why {score.temp}: {score.reasons.join(" · ")}</p>}
 
       <div className="mt-6 grid gap-4 sm:grid-cols-3">
-        <Stat label="Homes viewed" value={score.homesViewed} hint={prices.length ? `${money(Math.min(...prices))} – ${money(Math.max(...prices))}${types.length ? ` · ${types.join(", ")}` : ""}` : undefined} />
+        <Stat label="Homes viewed" value={score.homesViewed} hint={`${score.totalViews} visit${score.totalViews === 1 ? "" : "s"} in total${prices.length ? ` · ${money(Math.min(...prices))} – ${money(Math.max(...prices))}` : ""}${types.length ? ` · ${types.join(", ")}` : ""}`} />
         <Stat label="Showing requests" value={tours.length} />
         <Stat label="Last activity" value={timeAgo(score.lastActivity, now)} hint={score.lastActivity ? fmtDateTime(score.lastActivity) : undefined} />
       </div>
@@ -116,7 +116,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           <Card title="Homes they looked at">
             {viewed.length === 0 ? <p className="text-sm text-ink-soft">None yet.</p> : (
               <ul className="space-y-2 text-sm">
-                {viewed.map(([m, c]) => <li key={m}><Link href={`/listings/${m}`} className="hover:underline">{label(m)}</Link><span className="ml-1 text-xs text-ink-soft">{c.n > 1 ? `· viewed ${c.n}×` : ""}</span></li>)}
+                {viewed.map(([m, c]) => <li key={m}><Link href={`/listings/${m}`} className="hover:underline">{label(m)}</Link><span className="ml-1 text-xs text-ink-soft">· {c.n} visit{c.n === 1 ? "" : "s"}</span></li>)}
               </ul>
             )}
           </Card>

@@ -46,7 +46,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
                 <td className="p-3"><a href={`mailto:${lead.email}`} className="hover:underline">{lead.email}</a><br /><a href={`tel:${lead.phone ?? ""}`} className="text-ink-soft hover:underline">{phonePretty(lead.phone)}</a></td>
                 <td className="p-3"><Pill kind={lead.status} /></td>
                 <td className="p-3"><TempPill temp={score.temp} /></td>
-                <td className="p-3">{score.homesViewed}</td>
+                <td className="p-3">{score.homesViewed}{score.totalViews > score.homesViewed ? <span className="ml-1 text-xs text-ink-soft">({score.totalViews} visits)</span> : null}</td>
                 <td className="p-3">{tours.length}{openTours ? <span className="ml-1 text-xs font-semibold text-accent-deep">({openTours} open)</span> : null}</td>
                 <td className="p-3 text-ink-soft">{timeAgo(score.lastActivity, now)}</td>
               </tr>

@@ -9,7 +9,7 @@ import type { LeadEvent, Tour } from "./types";
 //   +10  any activity in the last 3 days
 //   Hot: 60+   Warm: 25+   Cool: below 25
 export type Temp = "hot" | "warm" | "cool";
-export interface Score { temp: Temp; points: number; reasons: string[]; homesViewed: number; lastActivity: string | null }
+export interface Score { temp: Temp; points: number; reasons: string[]; homesViewed: number; totalViews: number; lastActivity: string | null }
 
 const DAY = 86_400_000;
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -37,7 +37,7 @@ export function scoreLead(events: LeadEvent[], tours: Tour[], now = Date.now()):
 
   return {
     temp: points >= 60 ? "hot" : points >= 25 ? "warm" : "cool",
-    points, reasons, homesViewed: distinct,
+    points, reasons, homesViewed: distinct, totalViews: [...perMls.values()].reduce((a, b) => a + b, 0),
     lastActivity: last === null ? null : new Date(last).toISOString(),
   };
 }

@@ -7,6 +7,8 @@ import { useAuth } from "./AuthProvider";
 // Anyone can browse; after FREE_LISTING_VIEWS different listings we ask for a free account.
 // Signed-in visitors: each view is recorded against their lead record instead.
 // NOTE: this is a lead-capture prompt, not a security control (anti-scraping lives at the WAF).
+const lastSent = new Map<string, number>();
+
 export default function AuthGate({ mls }: { mls: string }) {
   const { user, open } = useAuth();
   const signedIn = !!user;
@@ -15,11 +17,10 @@ export default function AuthGate({ mls }: { mls: string }) {
     if (signedIn) {
       if (needsProfile) open("complete");
       else {
-        try { // one recorded view per listing per browser session
-          if (sessionStorage.getItem("tracked:" + mls)) return;
-          sessionStorage.setItem("tracked:" + mls, "1");
-        } catch { /* storage blocked: record anyway */ }
-        void trackAction("listing_view", mls);
+        // Every visit counts. The 3-second guard only absorbs accidental double-fires (React dev mode, double-tap),
+        // so opening a home again later — even minutes later in the same session — is a new recorded visit.
+        const now = Date.now();
+        if (now - (lastSent.get(mls) ?? 0) > 3000) { lastSent.set(mls, now); void trackAction("listing_view", mls); }
       }
       return;
     }
