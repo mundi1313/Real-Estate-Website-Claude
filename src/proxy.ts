@@ -1,12 +1,13 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { supabaseAnonKey, supabaseUrl } from "@/lib/auth/env";
 import { sessionCookie } from "@/lib/auth/supabase";
 
 // Keeps the Supabase session fresh on each request. No-op in demo mode.
 export async function proxy(request: NextRequest) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return NextResponse.next();
   let response = NextResponse.next({ request });
-  const sb = createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+  const sb = createServerClient(supabaseUrl(), supabaseAnonKey(), {
     cookies: {
       getAll: () => request.cookies.getAll(),
       setAll: (list) => {
