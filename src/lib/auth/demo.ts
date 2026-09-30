@@ -15,19 +15,24 @@ interface DemoUser {
   id: string; email: string; firstName: string; lastName: string; phone: string | null;
   termsAt: string | null; marketingAt: string | null; marketingText: string | null; createdAt: string;
 }
-interface Db { users: DemoUser[]; events: unknown[]; audit: unknown[]; tours: unknown[] }
+export interface DemoEvent { userId: string; type: string; mls?: string | null; at: string; termsVersion?: string }
+export interface DemoTour { id?: string; userId: string; name: string; email: string; phone: string; mls: string; preferredTimes: string; message: string; at: string; status?: string }
+export interface DemoNote { id: string; userId: string; note: string; at: string }
+export type DemoUserRec = DemoUser & { status?: string; source?: string };
+export interface Db { users: DemoUserRec[]; events: DemoEvent[]; audit: unknown[]; tours: DemoTour[]; notes: DemoNote[] }
 
 const off = () => process.env.NODE_ENV === "production";
 const UNAVAILABLE = { ok: false, error: "Accounts aren't available yet — please check back soon." } as const;
 
 function load(): Db {
-  const empty: Db = { users: [], events: [], audit: [], tours: [] };
+  const empty: Db = { users: [], events: [], audit: [], tours: [], notes: [] };
   return existsSync(FILE) ? { ...empty, ...(JSON.parse(readFileSync(FILE, "utf8")) as Db) } : empty;
 }
 function save(db: Db) {
   mkdirSync(join(process.cwd(), ".data"), { recursive: true });
   writeFileSync(FILE, JSON.stringify(db, null, 2));
 }
+export const demoDb = { load: () => load(), save: (db: Db) => save(db) };
 const toUser = (u: DemoUser): AuthUser => ({
   id: u.id, email: u.email, firstName: u.firstName, lastName: u.lastName, phone: u.phone,
   profileComplete: !!u.phone && !!u.termsAt,
@@ -106,7 +111,7 @@ export const demoBackend: AuthBackend = {
     const db = load();
     const u = db.users.find((x) => x.id === id);
     if (!u || !u.phone) return { ok: false, error: "Please sign in to book a showing." };
-    db.tours.push({ userId: u.id, name: `${u.firstName} ${u.lastName}`, email: u.email, phone: u.phone, ...i, at: new Date().toISOString() });
+    db.tours.push({ id: randomBytes(6).toString("hex"), userId: u.id, name: `${u.firstName} ${u.lastName}`, email: u.email, phone: u.phone, mls: i.mls, preferredTimes: i.preferredTimes, message: i.message, at: new Date().toISOString(), status: "new" });
     db.events.push({ userId: u.id, type: "tour_requested", mls: i.mls, at: new Date().toISOString() });
     audit(db, u.id, "tour_requested", ctx); save(db);
     return { ok: true };

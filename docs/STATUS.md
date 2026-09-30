@@ -16,13 +16,15 @@
 - Passwordless signup/login popup (Google + emailed link), gate after 1 listing, one-tap tour booking from the profile, audit log, lead events, demo backend + Supabase backend. See `docs/AUTH_SETUP.md`.
 - Modern redesign (home, search, listing detail, mobile).
 
+- Admin CRM at `/admin`: overview, leads list/filters, lead profiles (timeline, notes, stage, consent), showings inbox, RAE CSV export, lead scoring. Admin-only via `ADMIN_EMAILS`; every page/action/route re-checks (layout check alone leaks data — see `adminGate`).
+
 ## Blocked on RAE / Bridge
 - Real provider (Bridge RESO Web API), field mapping, 3–6h refresh job. Confirm application status first.
 
 ## TODO
 - Connect real Supabase (keys + run migrations + SMTP), Google provider; get RAE to confirm passwordless is acceptable.
 - Favourites, saved searches + alert emails (Resend), tour request persistence + notification.
-- CRM dashboard + intent scoring/notifications; quarterly RAE report job (first business day of each quarter).
+- Lead/showing alert emails to Arman (Resend); scheduled quarterly RAE report reminder (CSV export exists).
 - Map view, Walk/Transit/Bike Score (label as third-party data), WAF/rate limiting/anti-scraping (Cloudflare dashboard).
   Cloudflare Pages deployment (verify the current Next 16 adapter path).
 - Final domain; legal review of Privacy/Terms.

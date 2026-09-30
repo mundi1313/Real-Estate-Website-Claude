@@ -4,11 +4,11 @@ import { useRouter } from "next/navigation";
 import AuthModal, { type Step } from "./AuthModal";
 import type { AuthUser } from "@/lib/auth/types";
 
-interface Ctx { user: AuthUser | null; open: (step?: Step) => void }
-const AuthCtx = createContext<Ctx>({ user: null, open: () => {} });
+interface Ctx { user: AuthUser | null; isAdmin: boolean; open: (step?: Step) => void }
+const AuthCtx = createContext<Ctx>({ user: null, isAdmin: false, open: () => {} });
 export const useAuth = () => useContext(AuthCtx);
 
-export default function AuthProvider({ user, mode, children }: { user: AuthUser | null; mode: "supabase" | "demo"; children: React.ReactNode }) {
+export default function AuthProvider({ user, mode, isAdmin = false, children }: { user: AuthUser | null; mode: "supabase" | "demo"; isAdmin?: boolean; children: React.ReactNode }) {
   const router = useRouter();
   const [step, setStep] = useState<Step | null>(null);
   const [notice, setNotice] = useState("");
@@ -28,7 +28,7 @@ export default function AuthProvider({ user, mode, children }: { user: AuthUser 
     else if (user && !user.profileComplete) setStep("complete");
   }, [user]);
 
-  const value = useMemo(() => ({ user, open }), [user, open]);
+  const value = useMemo(() => ({ user, isAdmin, open }), [user, isAdmin, open]);
   return (
     <AuthCtx.Provider value={value}>
       {children}

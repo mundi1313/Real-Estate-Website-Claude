@@ -48,3 +48,16 @@ Only name + email are requested, so Google needs no app review.
   quarterly RAE client-list export (`rae_client_report` view exists).
 - Cloudflare: Next's `proxy.ts` (session refresh) runs as *experimental* Node middleware on the OpenNext adapter — test
   sign-in on the deployed preview before relying on it. Set the three env vars in the Cloudflare dashboard.
+
+## Your admin dashboard (private CRM)
+- **Where:** `/admin` on the site (locally http://localhost:3000/admin). Sign in with the same email link as visitors; you get an
+  orange **Admin** button in the header. Pages: Overview (stats, showings to confirm, hot leads, recent activity), Leads (search +
+  filters), each lead's profile (contact, consent wording on file, homes viewed, timeline, notes, stage), Showings inbox, and a
+  **RAE client list CSV** download.
+- **Who can open it:** only emails in `ADMIN_EMAILS` (comma-separated, in `.env.local` and in Cloudflare's environment variables).
+  With Supabase connected and `ADMIN_EMAILS` empty, *nobody* can open it. In local demo mode only, any signed-in test user can.
+- **Everyone else gets a plain 404**, and every admin page, action and download re-checks permission on the server.
+- **Migration:** run `supabase/migrations/0003_crm.sql` (adds the lead stage) after 0001 and 0002.
+- **Try it full of data (demo mode only):** `npm run seed:demo` adds 12 fictional leads; `npm run seed:demo -- --clear` removes them.
+- **Lead temperature** (Hot / Warm / Cool) is a points score — the rules are at the top of `src/lib/crm/score.ts`.
+- **Not built yet:** email/SMS alerts to you, and bulk actions.

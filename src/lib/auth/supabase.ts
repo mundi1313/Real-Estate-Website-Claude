@@ -29,7 +29,7 @@ async function userClient() {
 }
 
 // Service role: server-only, bypasses RLS. Used for the audit log, lead events and profile completion.
-const admin = () => createClient(url(), process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
+export const admin = () => createClient(url(), process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
 
 async function audit(userId: string | null, action: string, ctx: RequestCtx, meta: object = {}) {
   await admin().from("audit_log").insert({ user_id: userId, action, ip: ctx.ip, user_agent: ctx.userAgent, meta });
