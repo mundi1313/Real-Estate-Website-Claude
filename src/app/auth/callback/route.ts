@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseAnonKey, supabaseUrl } from "@/lib/auth/env";
-import { sessionCookie } from "@/lib/auth/supabase";
+import { admin, sessionCookie, trustThisDevice } from "@/lib/auth/supabase";
 
 // Landing point for Google sign-in and for the email-verification link.
 export async function GET(req: NextRequest) {
@@ -18,6 +18,13 @@ export async function GET(req: NextRequest) {
   let ok = false;
   if (code) ok = !(await sb.auth.exchangeCodeForSession(code)).error;
   else if (tokenHash) ok = !(await sb.auth.verifyOtp({ token_hash: tokenHash, type: "email" })).error;
+  if (ok) {
+    const { data } = await sb.auth.getUser();
+    if (data.user) {
+      await trustThisDevice(data.user.id); // this browser proved it owns the email: remember it
+      await admin().from("profiles").update({ email_verified_at: new Date().toISOString() }).eq("id", data.user.id);
+    }
+  }
   const dest = new URL(ok ? safe : "/?auth=failed", url.origin);
   if (ok) dest.searchParams.set("welcome", "1"); // client opens the phone/consent step if the profile is incomplete
   return NextResponse.redirect(dest);

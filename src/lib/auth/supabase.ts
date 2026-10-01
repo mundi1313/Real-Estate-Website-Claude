@@ -1,7 +1,9 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@supabase/supabase-js";
 import { cookies, headers } from "next/headers";
 import { MARKETING_TEXT } from "./consent";
+import { DEVICE_COOKIE, deviceCookieOptions, hashToken, newDeviceToken } from "./device";
 import { supabaseAnonKey, supabaseServiceKey, supabaseUrl } from "./env";
 import { TERMS_VERSION } from "./rules";
 import type { AuthBackend, AuthUser, RequestCtx } from "./types";
@@ -42,45 +44,84 @@ async function origin() {
   return `${h.get("x-forwarded-proto") ?? "https"}://${host}`;
 }
 
+
+// ---- trusted devices + instant sessions -----------------------------------------------------------------------------
+/** Remember this browser for the user (called after signup, an emailed link, or Google). */
+export async function trustThisDevice(userId: string) {
+  const token = newDeviceToken();
+  const h = await headers();
+  await admin().from("trusted_devices").insert({ user_id: userId, token_hash: await hashToken(token), user_agent: h.get("user-agent") });
+  (await cookies()).set(DEVICE_COOKIE, token, deviceCookieOptions());
+}
+
+async function isTrustedDevice(userId: string): Promise<boolean> {
+  const token = (await cookies()).get(DEVICE_COOKIE)?.value;
+  if (!token) return false;
+  const { data } = await admin().from("trusted_devices").select("id").eq("user_id", userId).eq("token_hash", await hashToken(token)).maybeSingle();
+  return !!data;
+}
+
+/** Signs the visitor in server-side without sending an email (the caller has already decided that is allowed). */
+async function instantSession(email: string): Promise<string | null> {
+  const { data, error } = await admin().auth.admin.generateLink({ type: "magiclink", email });
+  const hashed = data?.properties?.hashed_token;
+  if (error || !hashed) return null;
+  const sb = await userClient();
+  const { data: v, error: e2 } = await sb.auth.verifyOtp({ token_hash: hashed, type: (data.properties.verification_type as EmailOtpType) ?? "magiclink" });
+  return e2 ? null : v.user?.id ?? null;
+}
+
+async function sendLink(email: string) {
+  const sb = await userClient();
+  return sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: `${await origin()}/auth/callback` } });
+}
+
 export const supabaseBackend: AuthBackend = {
   mode: "supabase",
 
-  // Passwordless: Supabase emails a one-time sign-in link. Creating the user here (with their details as
-  // metadata) lets the DB trigger build the profile; the account is confirmed when they open the link.
+  // Instant sign-up: the account is created and signed in right away — no email to click. (The email stays "unverified"
+  // until the visitor opens an emailed link on some later sign-in from a new device.)
   async signUp(i, ctx) {
-    const sb = await userClient();
-    const { data, error } = await sb.auth.signInWithOtp({
-      email: i.email.trim().toLowerCase(),
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: `${await origin()}/auth/callback`,
-        data: {
-          first_name: i.firstName, last_name: i.lastName, phone: i.phone,
-          terms_accepted: true, terms_version: TERMS_VERSION,
-          marketing_consent: i.marketingConsent, marketing_consent_text: i.marketingConsent ? MARKETING_TEXT : null,
-        },
+    const email = i.email.trim().toLowerCase();
+    const { data: created, error: ce } = await admin().auth.admin.createUser({
+      email, email_confirm: true,
+      user_metadata: {
+        first_name: i.firstName, last_name: i.lastName, phone: i.phone, terms_accepted: true, terms_version: TERMS_VERSION,
+        marketing_consent: i.marketingConsent, marketing_consent_text: i.marketingConsent ? MARKETING_TEXT : null,
       },
     });
-    void data;
-    if (error) {
-      console.error("[auth] sign-up link failed:", error.message); // visible in the terminal running the site
-      const limited = /rate limit|too many|security purposes/i.test(error.message);
-      return { ok: false, error: limited ? "Too many emails were requested. Please wait a few minutes and try again." : "We couldn't send your sign-in link. Please try again in a moment." };
+    if (ce) {
+      if (/already|registered|exists/i.test(ce.message)) return supabaseBackend.signIn(email, ctx); // existing email: treat as sign-in
+      console.error("[auth] sign-up failed:", ce.message);
+      return { ok: false, error: "We couldn't create your account. Please try again in a moment." };
     }
-    await audit(null, "register_link_sent", ctx, { email: i.email.trim().toLowerCase() });
+    await audit(created.user.id, "register", ctx);
+    await admin().from("lead_events").insert({ user_id: created.user.id, event_type: "signup" });
+    const uid = await instantSession(email);
+    if (uid) { await trustThisDevice(uid); return { ok: true }; }
+    // Couldn't start a session directly: fall back to an emailed link.
+    const { error } = await sendLink(email);
+    if (error) { console.error("[auth] sign-up link failed:", error.message); return { ok: false, error: "Your account was created, but we couldn't sign you in. Please try signing in." }; }
     return { ok: true, needsVerification: true };
   },
 
+  // Returning visitor: on a remembered browser the email alone is enough. Anywhere else they must prove they own the
+  // email by opening one emailed link (which then remembers that browser).
   async signIn(email, ctx) {
-    const sb = await userClient();
-    const { error } = await sb.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: { shouldCreateUser: true, emailRedirectTo: `${await origin()}/auth/callback` }, // new email => account is created; name/phone/consent are collected right after the link is opened
-    });
+    const e = email.trim().toLowerCase();
+    const { data: p } = await admin().from("profiles").select("id").eq("username", e).maybeSingle();
+    if (p && (await isTrustedDevice(p.id))) {
+      const uid = await instantSession(e);
+      if (uid) {
+        await audit(uid, "login_trusted_device", ctx);
+        await admin().from("lead_events").insert({ user_id: uid, event_type: "login" });
+        return { ok: true };
+      }
+    }
+    const { error } = await sendLink(e);
     if (error) console.error("[auth] sign-in link failed:", error.message); // terminal only; the visitor sees the same message either way
-    // Same answer either way, so the form can't be used to discover who has an account.
-    await audit(null, error ? "login_link_failed" : "login_link_sent", ctx, { email: email.trim().toLowerCase() });
-    return { ok: true, needsVerification: true };
+    await audit(p?.id ?? null, error ? "login_link_failed" : "login_link_sent", ctx, { email: e });
+    return { ok: true, needsVerification: true }; // same answer either way, so the form can't be used to probe accounts
   },
 
   async signOut(ctx) {

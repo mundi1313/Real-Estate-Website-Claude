@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { checkEmailAction, completeProfileAction, googleAction, signInAction, signUpAction } from "@/app/auth/actions";
+import { usePathname } from "next/navigation";
+import { checkEmailAction, completeProfileAction, googleAction, signInAction, signOutAction, signUpAction } from "@/app/auth/actions";
 import { MARKETING_TEXT, TERMS_TEXT } from "@/lib/auth/consent";
 import { isEmail } from "@/lib/auth/rules";
 import type { AuthUser } from "@/lib/auth/types";
@@ -10,7 +11,7 @@ export type Step = "start" | "details" | "login" | "verify" | "complete";
 
 interface Props {
   step: Step; setStep: (s: Step) => void; onClose: () => void; onDone: () => void;
-  mode: "supabase" | "demo"; notice: string; user: AuthUser | null;
+  mode: "supabase" | "demo"; notice: string; user: AuthUser | null; forced: boolean;
 }
 
 const GoogleG = () => (
@@ -22,7 +23,8 @@ const GoogleG = () => (
   </svg>
 );
 
-export default function AuthModal({ step, setStep, onClose, onDone, mode, notice, user }: Props) {
+export default function AuthModal({ step, setStep, onClose, onDone, mode, notice, user, forced }: Props) {
+  const pathname = usePathname();
   const [pending, start] = useTransition();
   const [error, setError] = useState(notice);
   const [email, setEmail] = useState("");
@@ -33,11 +35,11 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !forced) onClose(); };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [onClose]);
+  }, [onClose, forced]);
 
   const go = (s: Step) => { setError(""); setStep(s); };
   const run = (fn: () => Promise<{ ok: boolean; error?: string; needsVerification?: boolean; url?: string; exists?: boolean }>, then: (r: { needsVerification?: boolean; url?: string; exists?: boolean }) => void) =>
@@ -60,11 +62,11 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
   );
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-brand-deep/70 p-4 backdrop-blur-sm" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-brand-deep/70 p-4 backdrop-blur-sm" onMouseDown={(e) => { if (!forced && e.target === e.currentTarget) onClose(); }}>
       <div role="dialog" aria-modal="true" aria-label={title} className="relative my-8 w-full max-w-md overflow-hidden rounded-3xl bg-white shadow-2xl">
-        <button onClick={onClose} aria-label="Close" className="absolute right-4 top-4 rounded-full p-1.5 text-ink-soft hover:bg-paper">✕</button>
+        {!forced && <button onClick={onClose} aria-label="Close" className="absolute right-4 top-4 rounded-full p-1.5 text-ink-soft hover:bg-paper">✕</button>}
         <div className="px-7 pb-7 pt-8">
-          <h2 className="pr-6 text-center text-2xl font-semibold">{title}</h2>
+          <h2 className="text-center text-2xl font-semibold">{title}</h2>
           {step === "start" && <p className="mt-1 text-center text-sm text-ink-soft">Free account — save homes, book tours and get updates.</p>}
           {mode === "demo" && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-center text-[11px] text-amber-800">Demo mode: accounts are stored locally and sign-in links are skipped.</p>}
           {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
@@ -94,6 +96,7 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
                 <button disabled={pending} className="btn btn-brand w-full disabled:opacity-60">{pending ? "One moment…" : "Continue with email →"}</button>
               </form>
               <p className="text-center text-sm text-ink-soft">Returning user? <button onClick={() => go("login")} className="font-semibold text-brand underline">Log in here</button></p>
+              {forced && pathname.startsWith("/listings") && <p className="text-center text-xs"><Link href="/search" className="text-ink-soft underline">← Back to all homes</Link></p>}
             </div>
           )}
 
@@ -127,8 +130,11 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
           {step === "verify" && (
             <div className="mt-6 space-y-3 text-center text-sm text-ink-soft">
               <p>We sent a {sent === "signup" ? "verification" : "sign-in"} link to <b className="text-ink">{email}</b>.</p>
-              <p>Open it on this device to {sent === "signup" ? "activate your account and sign in" : "sign in"}. If you don&apos;t see it, check your spam folder.</p>
-              <button onClick={onClose} className="btn btn-brand mt-2">Got it</button>
+              <p>Open it to {sent === "signup" ? "activate your account and sign in" : "sign in"}. If you don&apos;t see it, check your spam folder.</p>
+              {/* A required popup can't be closed from here (that would be a way around it); offer to try another email instead. */}
+              {forced
+                ? <button onClick={() => go("start")} className="btn btn-brand mt-2">Use a different email</button>
+                : <button onClick={onClose} className="btn btn-brand mt-2">Got it</button>}
             </div>
           )}
 
@@ -144,6 +150,7 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
               <label className="block text-xs font-medium">Phone *<input type="tel" value={f.phone} onChange={set("phone")} placeholder="(780) 555-0123" className="field mt-1" autoComplete="tel" required /></label>
               {consent}
               <button disabled={pending} className="btn btn-accent w-full disabled:opacity-60">{pending ? "Saving…" : "Continue"}</button>
+              {forced && <p className="text-center text-xs text-ink-soft">Not you? <button type="button" onClick={() => start(async () => { await signOutAction(); onDone(); })} className="underline">Sign out</button></p>}
             </form>
           )}
         </div>

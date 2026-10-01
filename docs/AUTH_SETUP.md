@@ -69,3 +69,17 @@ their profile), and a lead **turning hot** (sent once, at the moment their score
 just printed in the terminal. A failing email service never affects visitors (4-second limit, errors are only logged).
 Until you verify your own domain in Resend, the test sender `onboarding@resend.dev` only delivers to the email you signed up to
 Resend with. After verifying a domain, set `ALERT_FROM="Leads <alerts@yourdomain.ca>"`.
+
+## Instant sign-up and trusted devices (migration 0004)
+- **First time:** no confirmation email. The account is created and the visitor is signed in at once (`createUser` + a server-side
+  session). Their email stays *unverified* (`profiles.email_verified_at` is empty) until they open an emailed link.
+- **Returning on the same browser:** just the email — if this browser is a *trusted device* the site signs them in directly, no email.
+  The browser is remembered with a random HttpOnly cookie (`td`, 180 days); only its SHA-256 hash is stored (`trusted_devices`).
+- **A browser the site doesn't know** (new phone, cleared cookies, private window): one emailed link, which then remembers that browser.
+  This is what stops a stranger from signing in as someone else just by typing their email.
+- The listing popup is a **required step** (no close button, Escape and click-outside disabled); "Back to all homes" leaves the listing.
+  Popups the visitor opens themselves (header "Sign in", "Sign up to book") keep a close button.
+- **RAE:** the brief's checklist asks for email verification before an account is active and no persistent logins. This design
+  deliberately relaxes both; get RAE's written OK before launch. To revert: make `signUp` use `signInWithOtp` again (verify first).
+- Untested here against a live Supabase project (this environment has none); the demo backend mirrors the logic and is covered by
+  browser tests. First real-world test: sign up, sign out, sign back in with only the email; then repeat in a private window.

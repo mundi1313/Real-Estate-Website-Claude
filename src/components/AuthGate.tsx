@@ -15,7 +15,7 @@ export default function AuthGate({ mls }: { mls: string }) {
   const needsProfile = signedIn && !user!.profileComplete;
   useEffect(() => {
     if (signedIn) {
-      if (needsProfile) open("complete");
+      if (needsProfile) open("complete", true);
       else {
         // Every visit counts. The 3-second guard only absorbs accidental double-fires (React dev mode, double-tap),
         // so opening a home again later — even minutes later in the same session — is a new recorded visit.
@@ -28,7 +28,7 @@ export default function AuthGate({ mls }: { mls: string }) {
       const seen: string[] = JSON.parse(localStorage.getItem("viewedListings") ?? "[]");
       if (!seen.includes(mls)) seen.push(mls);
       localStorage.setItem("viewedListings", JSON.stringify(seen.slice(-50)));
-      if (seen.length > FREE_LISTING_VIEWS) open("start");
+      if (seen.length > FREE_LISTING_VIEWS) open("start", true); // required: no way to dismiss
     } catch { /* storage blocked: skip the prompt rather than break the page */ }
   }, [mls, signedIn, needsProfile, open]);
   return null;

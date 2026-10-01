@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { cookies } from "next/headers";
 import { MARKETING_TEXT } from "./consent";
+import { DEVICE_COOKIE, deviceCookieOptions, hashToken, newDeviceToken } from "./device";
 import { TERMS_VERSION } from "./rules";
 import type { AuthBackend, AuthUser } from "./types";
 
@@ -18,14 +19,15 @@ interface DemoUser {
 export interface DemoEvent { userId: string; type: string; mls?: string | null; at: string; termsVersion?: string }
 export interface DemoTour { id?: string; userId: string; name: string; email: string; phone: string; mls: string; preferredTimes: string; message: string; at: string; status?: string }
 export interface DemoNote { id: string; userId: string; note: string; at: string }
-export type DemoUserRec = DemoUser & { status?: string; source?: string };
-export interface Db { users: DemoUserRec[]; events: DemoEvent[]; audit: unknown[]; tours: DemoTour[]; notes: DemoNote[] }
+export type DemoUserRec = DemoUser & { status?: string; source?: string; devices?: string[] };
+export interface DemoPending { token: string; userId: string; at: string }
+export interface Db { users: DemoUserRec[]; events: DemoEvent[]; audit: unknown[]; tours: DemoTour[]; notes: DemoNote[]; pending: DemoPending[] }
 
 const off = () => process.env.NODE_ENV === "production";
 const UNAVAILABLE = { ok: false, error: "Accounts aren't available yet — please check back soon." } as const;
 
 function load(): Db {
-  const empty: Db = { users: [], events: [], audit: [], tours: [], notes: [] };
+  const empty: Db = { users: [], events: [], audit: [], tours: [], notes: [], pending: [] };
   return existsSync(FILE) ? { ...empty, ...(JSON.parse(readFileSync(FILE, "utf8")) as Db) } : empty;
 }
 function save(db: Db) {
@@ -41,6 +43,31 @@ const audit = (db: Db, userId: string | null, action: string, ctx: { ip: string 
   db.audit.push({ userId, action, ip: ctx.ip, userAgent: ctx.userAgent, at: new Date().toISOString() });
 const session = async (id: string) => (await cookies()).set(COOKIE, id, { httpOnly: true, sameSite: "lax", path: "/" });
 const currentId = async () => (await cookies()).get(COOKIE)?.value;
+
+// Trusted devices (same idea as the Supabase backend): a known browser needs only the email; a new one needs a link.
+async function trust(db: Db, u: DemoUserRec) {
+  const token = newDeviceToken();
+  (u.devices ||= []).push(await hashToken(token));
+  (await cookies()).set(DEVICE_COOKIE, token, deviceCookieOptions());
+  void db;
+}
+async function isTrusted(u: DemoUserRec) {
+  const token = (await cookies()).get(DEVICE_COOKIE)?.value;
+  return !!token && (u.devices ?? []).includes(await hashToken(token));
+}
+
+/** Completes a pending "emailed link" (demo only — the link is printed in the terminal). */
+export async function demoConsumeLink(token: string): Promise<boolean> {
+  if (off()) return false;
+  const db = load();
+  const i = db.pending.findIndex((p) => p.token === token);
+  if (i < 0) return false;
+  const u = db.users.find((x) => x.id === db.pending[i].userId);
+  if (!u) return false;
+  db.pending.splice(i, 1);
+  await trust(db, u); await session(u.id); save(db);
+  return true;
+}
 
 export const demoBackend: AuthBackend = {
   mode: "demo",
@@ -59,8 +86,9 @@ export const demoBackend: AuthBackend = {
     db.users.push(user);
     db.events.push({ userId: user.id, type: "signup", termsVersion: TERMS_VERSION, at: now });
     audit(db, user.id, "register", ctx);
+    await trust(db, user);
     save(db);
-    await session(user.id); // demo mode skips the emailed link
+    await session(user.id); // instant sign-up: no email to click
     return { ok: true };
   },
 
@@ -71,13 +99,16 @@ export const demoBackend: AuthBackend = {
     if (!u) { // unknown email: create a bare account; name/phone/consent are collected next (mirrors the emailed-link flow)
       const now = new Date().toISOString();
       const created: DemoUserRec = { id: randomBytes(8).toString("hex"), email: email.trim().toLowerCase(), firstName: "", lastName: "", phone: null, termsAt: null, marketingAt: null, marketingText: null, createdAt: now };
-      db.users.push(created); db.events.push({ userId: created.id, type: "signup", at: now }); audit(db, created.id, "register", ctx); save(db);
+      db.users.push(created); db.events.push({ userId: created.id, type: "signup", at: now }); audit(db, created.id, "register", ctx);
+      await trust(db, created); save(db);
       await session(created.id);
       return { ok: true };
     }
-    audit(db, u.id, "login", ctx); save(db);
-    await session(u.id);
-    return { ok: true };
+    if (await isTrusted(u)) { audit(db, u.id, "login_trusted_device", ctx); save(db); await session(u.id); return { ok: true }; }
+    const token = newDeviceToken();
+    db.pending.push({ token, userId: u.id, at: new Date().toISOString() }); audit(db, u.id, "login_link_sent", ctx); save(db);
+    console.log(`\n[demo email] Sign-in link for ${u.email}: http://localhost:3000/auth/demo?t=${token}\n`);
+    return { ok: true, needsVerification: true };
   },
 
   async signOut(ctx) {
