@@ -1,11 +1,10 @@
 # Accounts & lead capture
 
 ## How it works
-- Visitors browse freely. After they open **1 listing** (`FREE_LISTING_VIEWS` in `src/lib/auth/rules.ts`; the popup appears
-  on the 2nd different listing) a "Continue Your Home Search" popup asks them to sign up.
+- Visitors browse freely. On the **very first listing** (`FREE_LISTING_VIEWS = 0` in `src/lib/auth/rules.ts`; raise it to allow free views) a "Continue Your Home Search" popup asks them to sign up.
 - **No passwords.** **Google**: name + email come from Google, then a short step asks for phone + consent.
   **Email**: first/last name, email, phone, consent — then we email a one-time sign-in link. Returning users just enter
-  their email to get a new link. If the email is new, an account is created and the popup asks for name, phone and consent as soon
+  their email: the popup checks whether it is registered and, if so, only sends the link (no form). New emails get the details form. If the email is new, an account is created and the popup asks for name, phone and consent as soon
   as the link is opened (or right away in demo mode) — there is no dead end for people who pick "Log in" by mistake.
 - **Booking a tour** uses the signed-in profile (name/email/phone are never re-typed); they only pick a date and time.
   Requests are saved to `tour_requests` and logged as a lead event.

@@ -94,6 +94,11 @@ export const demoBackend: AuthBackend = {
     return u ? toUser(u) : null;
   },
 
+  async emailExists(email) {
+    if (off()) return false;
+    return load().users.some((u) => u.email === email.trim().toLowerCase());
+  },
+
   async completeProfile(i, ctx) {
     if (off()) return UNAVAILABLE;
     const db = load();

@@ -102,6 +102,11 @@ export const supabaseBackend: AuthBackend = {
     } satisfies AuthUser;
   },
 
+  async emailExists(email) {
+    const { data } = await admin().from("profiles").select("id").eq("username", email.trim().toLowerCase()).maybeSingle();
+    return !!data;
+  },
+
   async completeProfile(i, ctx) {
     const sb = await userClient();
     const { data } = await sb.auth.getUser();

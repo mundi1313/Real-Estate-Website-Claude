@@ -29,6 +29,13 @@ export async function signUpAction(f: {
   return res;
 }
 
+// Lets the popup skip the "new account" form for people who already registered.
+// Trade-off: this reveals whether an email is registered with this site. Acceptable for a lead site; pair with Cloudflare rate limiting.
+export async function checkEmailAction(email: string): Promise<{ ok: boolean; exists: boolean }> {
+  if (!isEmail(str(email))) return { ok: false, exists: false };
+  return { ok: true, exists: await auth.emailExists(str(email)) };
+}
+
 export async function signInAction(f: { email: string }): Promise<AuthResult> {
   if (!isEmail(str(f.email))) return fail("Please enter a valid email address.");
   const res = await auth.signIn(str(f.email), await requestCtx());

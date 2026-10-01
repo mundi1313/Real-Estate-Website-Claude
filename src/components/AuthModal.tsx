@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { completeProfileAction, googleAction, signInAction, signUpAction } from "@/app/auth/actions";
+import { checkEmailAction, completeProfileAction, googleAction, signInAction, signUpAction } from "@/app/auth/actions";
 import { MARKETING_TEXT, TERMS_TEXT } from "@/lib/auth/consent";
 import { isEmail } from "@/lib/auth/rules";
 import type { AuthUser } from "@/lib/auth/types";
@@ -40,7 +40,7 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
   }, [onClose]);
 
   const go = (s: Step) => { setError(""); setStep(s); };
-  const run = (fn: () => Promise<{ ok: boolean; error?: string; needsVerification?: boolean; url?: string }>, then: (r: { needsVerification?: boolean; url?: string }) => void) =>
+  const run = (fn: () => Promise<{ ok: boolean; error?: string; needsVerification?: boolean; url?: string; exists?: boolean }>, then: (r: { needsVerification?: boolean; url?: string; exists?: boolean }) => void) =>
     start(async () => {
       setError("");
       const r = await fn();
@@ -76,9 +76,22 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
                 <GoogleG /> Continue with Google
               </button>
               <div className="flex items-center gap-3 text-xs text-ink-soft"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
-              <form onSubmit={(e) => { e.preventDefault(); if (!isEmail(email)) return setError("Please enter a valid email address."); go("details"); }} className="space-y-3">
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                if (!isEmail(email)) return setError("Please enter a valid email address.");
+                // Already registered: just email the sign-in link. New: collect name + phone first.
+                run(async () => {
+                  const c = await checkEmailAction(email);
+                  if (!c.ok || !c.exists) return { ok: true };
+                  const r = await signInAction({ email });
+                  return r.ok ? { ...r, exists: true } : r;
+                }, (r) => {
+                  if ((r as { exists?: boolean }).exists) { if (r.needsVerification) { setSent("login"); go("verify"); } else onDone(); }
+                  else go("details");
+                });
+              }} className="space-y-3">
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@website.com" className="field" aria-label="Email" autoComplete="email" required />
-                <button className="btn btn-brand w-full">Continue with email →</button>
+                <button disabled={pending} className="btn btn-brand w-full disabled:opacity-60">{pending ? "One moment…" : "Continue with email →"}</button>
               </form>
               <p className="text-center text-sm text-ink-soft">Returning user? <button onClick={() => go("login")} className="font-semibold text-brand underline">Log in here</button></p>
             </div>

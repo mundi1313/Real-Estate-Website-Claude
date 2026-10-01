@@ -28,6 +28,8 @@ export interface AuthBackend {
   signIn(email: string, ctx: RequestCtx): Promise<AuthResult>;
   signOut(ctx: RequestCtx): Promise<void>;
   getUser(): Promise<AuthUser | null>;
+  /** True if this email already has an account (used so returning visitors only type their email). */
+  emailExists(email: string): Promise<boolean>;
   completeProfile(i: { phone: string; marketingConsent: boolean; firstName?: string; lastName?: string }, ctx: RequestCtx): Promise<AuthResult>;
   startGoogle(next: string): Promise<AuthResult>;
   createTour(i: TourInput, ctx: RequestCtx): Promise<AuthResult>;

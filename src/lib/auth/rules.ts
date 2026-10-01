@@ -1,5 +1,5 @@
 // Shared (client + server) signup rules.
-export const FREE_LISTING_VIEWS = 1; // unique listings a visitor can open before being asked to sign up
+export const FREE_LISTING_VIEWS = 0; // unique listings a visitor can open before being asked to sign up (0 = ask on the very first one)
 export const TERMS_VERSION = "2026-09-draft";
 
 export const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s.trim());
