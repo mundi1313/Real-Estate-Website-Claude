@@ -3,7 +3,6 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@supabase/supabase-js";
 import { cookies, headers } from "next/headers";
 import { MARKETING_TEXT } from "./consent";
-import { DEVICE_COOKIE, deviceCookieOptions, hashToken, newDeviceToken } from "./device";
 import { supabaseAnonKey, supabaseServiceKey, supabaseUrl } from "./env";
 import { TERMS_VERSION } from "./rules";
 import type { AuthBackend, AuthUser, RequestCtx } from "./types";
@@ -45,23 +44,8 @@ async function origin() {
 }
 
 
-// ---- trusted devices + instant sessions -----------------------------------------------------------------------------
-/** Remember this browser for the user (called after signup, an emailed link, or Google). */
-export async function trustThisDevice(userId: string) {
-  const token = newDeviceToken();
-  const h = await headers();
-  await admin().from("trusted_devices").insert({ user_id: userId, token_hash: await hashToken(token), user_agent: h.get("user-agent") });
-  (await cookies()).set(DEVICE_COOKIE, token, deviceCookieOptions());
-}
-
-async function isTrustedDevice(userId: string): Promise<boolean> {
-  const token = (await cookies()).get(DEVICE_COOKIE)?.value;
-  if (!token) return false;
-  const { data } = await admin().from("trusted_devices").select("id").eq("user_id", userId).eq("token_hash", await hashToken(token)).maybeSingle();
-  return !!data;
-}
-
-/** Signs the visitor in server-side without sending an email (the caller has already decided that is allowed). */
+// ---- instant sessions (no email is ever sent) ------------------------------------------------------------------------
+/** Signs the visitor in server-side. The caller has already decided that is allowed. */
 async function instantSession(email: string): Promise<string | null> {
   const { data, error } = await admin().auth.admin.generateLink({ type: "magiclink", email });
   const hashed = data?.properties?.hashed_token;
@@ -71,16 +55,10 @@ async function instantSession(email: string): Promise<string | null> {
   return e2 ? null : v.user?.id ?? null;
 }
 
-async function sendLink(email: string) {
-  const sb = await userClient();
-  return sb.auth.signInWithOtp({ email, options: { shouldCreateUser: true, emailRedirectTo: `${await origin()}/auth/callback` } });
-}
-
 export const supabaseBackend: AuthBackend = {
   mode: "supabase",
 
-  // Instant sign-up: the account is created and signed in right away — no email to click. (The email stays "unverified"
-  // until the visitor opens an emailed link on some later sign-in from a new device.)
+  // Instant sign-up: the account is created and the visitor is signed in at once. No email is sent or required.
   async signUp(i, ctx) {
     const email = i.email.trim().toLowerCase();
     const { data: created, error: ce } = await admin().auth.admin.createUser({
@@ -98,31 +76,42 @@ export const supabaseBackend: AuthBackend = {
     await audit(created.user.id, "register", ctx);
     await admin().from("lead_events").insert({ user_id: created.user.id, event_type: "signup" });
     const uid = await instantSession(email);
-    if (uid) { await trustThisDevice(uid); return { ok: true }; }
-    // Couldn't start a session directly: fall back to an emailed link.
-    const { error } = await sendLink(email);
-    if (error) { console.error("[auth] sign-up link failed:", error.message); return { ok: false, error: "Your account was created, but we couldn't sign you in. Please try signing in." }; }
-    return { ok: true, needsVerification: true };
+    if (!uid) { console.error("[auth] could not start a session after sign-up"); return { ok: false, error: "Your account was created, but we couldn't sign you in. Please try signing in." }; }
+    return { ok: true };
   },
 
-  // Returning visitor: on a remembered browser the email alone is enough. Anywhere else they must prove they own the
-  // email by opening one emailed link (which then remembers that browser).
+  // Returning visitor: the email alone is enough (admin emails never reach here — the action requires the admin password first).
   async signIn(email, ctx) {
     const e = email.trim().toLowerCase();
     const { data: p } = await admin().from("profiles").select("id").eq("username", e).maybeSingle();
-    if (p && (await isTrustedDevice(p.id))) {
-      const uid = await instantSession(e);
-      if (uid) {
-        await audit(uid, "login_trusted_device", ctx);
-        await admin().from("lead_events").insert({ user_id: uid, event_type: "login" });
-        return { ok: true };
-      }
-    }
-    const { error } = await sendLink(e);
-    if (error) console.error("[auth] sign-in link failed:", error.message); // terminal only; the visitor sees the same message either way
-    await audit(p?.id ?? null, error ? "login_link_failed" : "login_link_sent", ctx, { email: e });
-    return { ok: true, needsVerification: true }; // same answer either way, so the form can't be used to probe accounts
+    if (!p) return { ok: false, error: "We couldn't find that email — please sign up.", needsSignup: true };
+    const uid = await instantSession(e);
+    if (!uid) return { ok: false, error: "We couldn't sign you in right now. Please try again." };
+    await audit(uid, "login", ctx);
+    await admin().from("lead_events").insert({ user_id: uid, event_type: "login" });
+    return { ok: true };
   },
+
+  async signInAsAdmin(email, ctx) {
+    const e = email.trim().toLowerCase();
+    const { data: p } = await admin().from("profiles").select("id").eq("username", e).maybeSingle();
+    if (!p) {
+      const { error } = await admin().auth.admin.createUser({ email: e, email_confirm: true, user_metadata: {} });
+      if (error && !/already|registered|exists/i.test(error.message)) { console.error("[auth] admin account creation failed:", error.message); return { ok: false, error: "We couldn't sign you in right now." }; }
+    }
+    const uid = await instantSession(e);
+    if (!uid) return { ok: false, error: "We couldn't sign you in right now. Please try again." };
+    await audit(uid, "login_admin", ctx);
+    return { ok: true };
+  },
+
+  async countAdminFailures(ip, windowMs) {
+    let q = admin().from("audit_log").select("id", { count: "exact", head: true }).eq("action", "admin_login_failed").gte("created_at", new Date(Date.now() - windowMs).toISOString());
+    if (ip) q = q.eq("ip", ip);
+    const { count } = await q;
+    return count ?? 0;
+  },
+  async recordAdminFailure(ctx) { await audit(null, "admin_login_failed", ctx); },
 
   async signOut(ctx) {
     const sb = await userClient();

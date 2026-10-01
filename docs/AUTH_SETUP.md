@@ -70,16 +70,20 @@ just printed in the terminal. A failing email service never affects visitors (4-
 Until you verify your own domain in Resend, the test sender `onboarding@resend.dev` only delivers to the email you signed up to
 Resend with. After verifying a domain, set `ALERT_FROM="Leads <alerts@yourdomain.ca>"`.
 
-## Instant sign-up and trusted devices (migration 0004)
-- **First time:** no confirmation email. The account is created and the visitor is signed in at once (`createUser` + a server-side
-  session). Their email stays *unverified* (`profiles.email_verified_at` is empty) until they open an emailed link.
-- **Returning on the same browser:** just the email — if this browser is a *trusted device* the site signs them in directly, no email.
-  The browser is remembered with a random HttpOnly cookie (`td`, 180 days); only its SHA-256 hash is stored (`trusted_devices`).
-- **A browser the site doesn't know** (new phone, cleared cookies, private window): one emailed link, which then remembers that browser.
-  This is what stops a stranger from signing in as someone else just by typing their email.
-- The listing popup is a **required step** (no close button, Escape and click-outside disabled); "Back to all homes" leaves the listing.
-  Popups the visitor opens themselves (header "Sign in", "Sign up to book") keep a close button.
-- **RAE:** the brief's checklist asks for email verification before an account is active and no persistent logins. This design
-  deliberately relaxes both; get RAE's written OK before launch. To revert: make `signUp` use `signInWithOtp` again (verify first).
-- Untested here against a live Supabase project (this environment has none); the demo backend mirrors the logic and is covered by
-  browser tests. First real-world test: sign up, sign out, sign back in with only the email; then repeat in a private window.
+## No-email sign-in, welcome email, admin password
+- **Visitors never receive a confirmation or sign-in email.** First time: name + phone + consent, then they are in instantly.
+  Returning (any browser, any device): just their email. The popup checks whether the email is registered (so it can skip the form).
+- **Trade-off (owner's decision):** anyone who types a registered *visitor* email is signed in as that visitor, so a visitor's
+  name/phone/activity are only as private as their email address. Worth revisiting before launch.
+- **Welcome email** (the only email a visitor gets): sent once after they register, from `MAIL_FROM`
+  (e.g. `Keys to Edmonton <hello@keystoedmonton.ca>`), transactional only, with Arman's name + eXp Realty in the footer. Without
+  `RESEND_API_KEY` + `MAIL_FROM` it is only printed in the server log. Supabase's SMTP/templates are no longer used for visitors.
+- **Admin is different.** Emails in `ADMIN_EMAILS` can never be signed in (or signed up) with just an email: the popup asks for
+  `ADMIN_PASSWORD`. Two locks guard `/admin`: the admin email, plus a signed `admin_ok` cookie (HttpOnly, SameSite=Strict, 12 h)
+  that only the password creates — so even a session obtained another way (e.g. Google) is asked for the password at `/admin`.
+  Wrong guesses: 0.9 s delay; 5 failures per IP / 15 min or 30 per hour overall locks admin sign-in for the window.
+  With Supabase connected and no `ADMIN_PASSWORD`, nobody can open `/admin` (fails closed). The admin account is excluded from the
+  leads list, stats and RAE export.
+- **Set `ADMIN_PASSWORD` in `.env.local` and run `npm run deploy:secrets`.** Never put it in code, docs or chat. Use a long unique one.
+- **RAE:** the brief's checklist asks for email verification before an account is active and no persistent logins; this design
+  deliberately drops verification. Get RAE's written OK before going public.

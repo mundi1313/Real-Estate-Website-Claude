@@ -4,12 +4,14 @@
 export const GATE_COOKIE = "site_gate";
 const enc = new TextEncoder();
 
-/** Cookie value: an HMAC keyed by the password itself, so changing the password logs everyone out. */
-export async function gateToken(password: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", enc.encode(password), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode("keys-to-edmonton-site-gate-v1"));
+export async function hmacHex(key: string, message: string): Promise<string> {
+  const k = await crypto.subtle.importKey("raw", enc.encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", k, enc.encode(message));
   return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+
+/** Cookie value: an HMAC keyed by the password itself, so changing the password logs everyone out. */
+export const gateToken = (password: string) => hmacHex(password, "keys-to-edmonton-site-gate-v1");
 
 export function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;

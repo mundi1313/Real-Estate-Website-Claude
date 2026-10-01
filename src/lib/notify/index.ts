@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { phonePretty } from "@/lib/format";
+import { site } from "@/lib/site";
 
 // Email alerts to Arman (via Resend's HTTP API — no SDK needed).
 //   RESEND_API_KEY   from resend.com (without it, alerts are only printed to the server log)
@@ -52,4 +53,38 @@ export async function alertShowing(w: Who, listing: string, when: string, messag
 }
 export async function alertHotLead(w: Who, reasons: string[]) {
   await sendAlert(`Hot lead: ${name(w)}`, [["Who", name(w)], ["Phone", phonePretty(w.phone)], ["Email", w.email], ["Why", reasons.join(" · ")]], await leadLink(w));
+}
+
+/**
+ * The one email visitors receive: a welcome after they register. Strictly transactional (no promotions, no confirmation link).
+ *   MAIL_FROM  e.g. "Keys to Edmonton <hello@keystoedmonton.ca>" (replies reach Arman via the forwarding address)
+ * Without RESEND_API_KEY or MAIL_FROM it is only printed to the server log. Never blocks or breaks the visitor's request.
+ */
+export async function sendWelcome(w: { email: string; firstName: string }): Promise<void> {
+  try {
+    const origin = await siteOrigin();
+    const name = w.firstName.trim() || "there";
+    const subject = `Welcome to ${site.brand}`;
+    const a = site.agent;
+    const text = `Hi ${name},\n\nThanks for registering with ${site.brand}. You can browse Edmonton-area homes any time and request a showing in one tap.\n\nBrowse homes: ${origin}/search\n\nQuestions? Just reply to this email and it goes straight to ${a.name}.\n\n${a.name}, ${a.title} · ${a.team} · ${a.brokerage}\n${a.city}\nYou are receiving this because you registered at ${origin.replace(/^https?:\/\//, "")}.`;
+    if (!process.env.RESEND_API_KEY || !process.env.MAIL_FROM) {
+      console.log(`[welcome email: not sent — set RESEND_API_KEY and MAIL_FROM]\nTo: ${w.email}\n${text}`);
+      return;
+    }
+    const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#0e2238">` +
+      `<h2 style="margin:0 0 12px;font-size:22px">Welcome to ${esc(site.brand)}</h2>` +
+      `<p style="line-height:1.5">Hi ${esc(name)}, thanks for registering. You can browse Edmonton-area homes any time and request a showing in one tap.</p>` +
+      `<p style="margin:24px 0"><a href="${esc(origin)}/search" style="background:#12395c;color:#fff;padding:12px 22px;border-radius:8px;text-decoration:none;display:inline-block;font-weight:bold">Browse homes</a></p>` +
+      `<p style="line-height:1.5">Questions? Just reply to this email — it goes straight to ${esc(a.name)}.</p>` +
+      `<hr style="border:none;border-top:1px solid #e4e0d6;margin:24px 0"><p style="margin:0;font-size:12px;color:#777;line-height:1.5">${esc(a.name)}, ${esc(a.title)} · ${esc(a.team)} · ${esc(a.brokerage)} · ${esc(a.city)}<br>You are receiving this because you registered at ${esc(origin.replace(/^https?:\/\//, ""))}.</p></div>`;
+    const res = await fetch(process.env.RESEND_API_URL || "https://api.resend.com/emails", {
+      method: "POST",
+      headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}`, "content-type": "application/json" },
+      body: JSON.stringify({ from: process.env.MAIL_FROM, to: [w.email], subject, html, text }),
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) console.error("[welcome] Resend refused the email:", res.status, (await res.text()).slice(0, 300));
+  } catch (e) {
+    console.error("[welcome] could not send:", e instanceof Error ? e.message : e);
+  }
 }

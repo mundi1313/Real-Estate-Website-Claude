@@ -1,18 +1,20 @@
 "use client";
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { checkEmailAction, completeProfileAction, googleAction, signInAction, signOutAction, signUpAction } from "@/app/auth/actions";
+import { usePathname, useRouter } from "next/navigation";
+import { adminSignInAction, checkEmailAction, completeProfileAction, googleAction, signInAction, signOutAction, signUpAction } from "@/app/auth/actions";
 import { MARKETING_TEXT, TERMS_TEXT } from "@/lib/auth/consent";
 import { isEmail } from "@/lib/auth/rules";
 import type { AuthUser } from "@/lib/auth/types";
 
-export type Step = "start" | "details" | "login" | "verify" | "complete";
+export type Step = "start" | "details" | "adminpw" | "complete";
 
 interface Props {
   step: Step; setStep: (s: Step) => void; onClose: () => void; onDone: () => void;
   mode: "supabase" | "demo"; notice: string; user: AuthUser | null; forced: boolean;
 }
+
+type Outcome = { ok: boolean; error?: string; next?: "details" | "adminpw" | "done"; url?: string };
 
 const GoogleG = () => (
   <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden>
@@ -25,11 +27,12 @@ const GoogleG = () => (
 
 export default function AuthModal({ step, setStep, onClose, onDone, mode, notice, user, forced }: Props) {
   const pathname = usePathname();
+  const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState(notice);
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState<"signup" | "login">("signup");
   const [f, setF] = useState({ firstName: user?.firstName ?? "", lastName: user?.lastName ?? "", phone: "", website: "" });
+  const [adminPw, setAdminPw] = useState("");
   const [terms, setTerms] = useState(false);
   const [marketing, setMarketing] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
@@ -42,15 +45,30 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
   }, [onClose, forced]);
 
   const go = (s: Step) => { setError(""); setStep(s); };
-  const run = (fn: () => Promise<{ ok: boolean; error?: string; needsVerification?: boolean; url?: string; exists?: boolean }>, then: (r: { needsVerification?: boolean; url?: string; exists?: boolean }) => void) =>
+  const run = (fn: () => Promise<Outcome>, then: (o: Outcome) => void) =>
     start(async () => {
       setError("");
-      const r = await fn();
-      if (!r.ok) setError(r.error ?? "Something went wrong. Please try again.");
-      else then(r);
+      const o = await fn();
+      if (!o.ok) setError(o.error ?? "Something went wrong. Please try again.");
+      else then(o);
     });
+  const route = (o: Outcome) => (o.next === "adminpw" ? go("adminpw") : o.next === "details" ? go("details") : onDone());
 
-  const title = step === "login" ? "Welcome back" : step === "verify" ? "Check your email" : step === "complete" ? "One last step" : "Continue Your Home Search";
+  // One entry point for "I typed my email": admin -> password; registered -> signed in; new -> signup form. No emails are sent.
+  const continueWithEmail = (): Promise<Outcome> => (async () => {
+    if (!isEmail(email)) return { ok: false, error: "Please enter a valid email address." };
+    const c = await checkEmailAction(email);
+    if (!c.ok) return { ok: false, error: "Please enter a valid email address." };
+    if (c.admin) return { ok: true, next: "adminpw" };
+    if (!c.exists) return { ok: true, next: "details" };
+    const r = await signInAction({ email });
+    if (r.ok) return { ok: true, next: "done" };
+    if (r.needsPassword) return { ok: true, next: "adminpw" };
+    if (r.needsSignup) return { ok: true, next: "details" };
+    return { ok: false, error: r.error };
+  })();
+
+  const title = step === "adminpw" ? "Admin sign-in" : step === "complete" ? "One last step" : "Continue Your Home Search";
 
   const consent = (
     <div className="space-y-2.5 text-xs leading-relaxed text-ink-soft">
@@ -67,35 +85,21 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
         {!forced && <button onClick={onClose} aria-label="Close" className="absolute right-4 top-4 rounded-full p-1.5 text-ink-soft hover:bg-paper">✕</button>}
         <div className="px-7 pb-7 pt-8">
           <h2 className="text-center text-2xl font-semibold">{title}</h2>
-          {step === "start" && <p className="mt-1 text-center text-sm text-ink-soft">Free account — save homes, book tours and get updates.</p>}
-          {mode === "demo" && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-center text-[11px] text-amber-800">Demo mode: accounts are stored locally and sign-in links are skipped.</p>}
+          {step === "start" && <p className="mt-1 text-center text-sm text-ink-soft">Free account — book tours and get updates. Just your email to get in.</p>}
+          {mode === "demo" && <p className="mt-3 rounded-lg bg-amber-50 p-2 text-center text-[11px] text-amber-800">Demo mode: accounts are stored locally on this computer.</p>}
           {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
 
           {step === "start" && (
             <div className="mt-6 space-y-4">
-              <button type="button" disabled={pending} onClick={() => run(() => googleAction(window.location.pathname + window.location.search), (r) => { if (r.url) window.location.href = r.url; })}
+              <button type="button" disabled={pending} onClick={() => run(async () => { const r = await googleAction(window.location.pathname + window.location.search); if (r.ok && r.url) window.location.href = r.url; return r.ok ? { ok: true } : { ok: false, error: r.error }; }, () => {})}
                 className="flex w-full items-center justify-center gap-3 rounded-xl border border-line bg-white py-3 text-sm font-semibold shadow-sm transition hover:bg-paper disabled:opacity-60">
                 <GoogleG /> Continue with Google
               </button>
               <div className="flex items-center gap-3 text-xs text-ink-soft"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
-              <form onSubmit={(e) => {
-                e.preventDefault();
-                if (!isEmail(email)) return setError("Please enter a valid email address.");
-                // Already registered: just email the sign-in link. New: collect name + phone first.
-                run(async () => {
-                  const c = await checkEmailAction(email);
-                  if (!c.ok || !c.exists) return { ok: true };
-                  const r = await signInAction({ email });
-                  return r.ok ? { ...r, exists: true } : r;
-                }, (r) => {
-                  if ((r as { exists?: boolean }).exists) { if (r.needsVerification) { setSent("login"); go("verify"); } else onDone(); }
-                  else go("details");
-                });
-              }} className="space-y-3">
+              <form onSubmit={(e) => { e.preventDefault(); run(continueWithEmail, route); }} className="space-y-3">
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@website.com" className="field" aria-label="Email" autoComplete="email" required />
                 <button disabled={pending} className="btn btn-brand w-full disabled:opacity-60">{pending ? "One moment…" : "Continue with email →"}</button>
               </form>
-              <p className="text-center text-sm text-ink-soft">Returning user? <button onClick={() => go("login")} className="font-semibold text-brand underline">Log in here</button></p>
               {forced && pathname.startsWith("/listings") && <p className="text-center text-xs"><Link href="/search" className="text-ink-soft underline">← Back to all homes</Link></p>}
             </div>
           )}
@@ -103,7 +107,11 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
           {step === "details" && (
             <form className="mt-6 space-y-3" onSubmit={(e) => {
               e.preventDefault();
-              run(() => signUpAction({ email, ...f, acceptTerms: terms, marketingConsent: marketing }), (r) => { if (r.needsVerification) { setSent("signup"); go("verify"); } else onDone(); });
+              run(async () => {
+                const r = await signUpAction({ email, ...f, acceptTerms: terms, marketingConsent: marketing });
+                if (r.ok) return { ok: true, next: "done" };
+                return r.needsPassword ? { ok: true, next: "adminpw" } : { ok: false, error: r.error };
+              }, route);
             }}>
               <div className="grid grid-cols-2 gap-3">
                 <label className="text-xs font-medium">First name *<input value={f.firstName} onChange={set("firstName")} className="field mt-1" autoComplete="given-name" required /></label>
@@ -118,28 +126,22 @@ export default function AuthModal({ step, setStep, onClose, onDone, mode, notice
             </form>
           )}
 
-          {step === "login" && (
-            <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); run(() => signInAction({ email }), (r) => { if (r.needsVerification) { setSent("login"); go("verify"); } else onDone(); }); }}>
-              <p className="text-center text-sm text-ink-soft">Enter your email and we&apos;ll send you a link to sign in — no password needed. New here? We&apos;ll set up your free account when you open the link.</p>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="field" autoComplete="email" required />
-              <button disabled={pending} className="btn btn-brand w-full disabled:opacity-60">{pending ? "Sending…" : "Email me a sign-in link"}</button>
-              <p className="text-center text-sm text-ink-soft">New here? <button type="button" onClick={() => go("start")} className="font-semibold text-brand underline">Create an account</button></p>
+          {step === "adminpw" && (
+            <form className="mt-6 space-y-3" onSubmit={(e) => {
+              e.preventDefault();
+              run(async () => { const r = await adminSignInAction({ email, password: adminPw }); return r.ok ? { ok: true, next: "done" } : { ok: false, error: r.error }; },
+                () => { onDone(); router.push("/admin"); });
+            }}>
+              <p className="text-center text-sm text-ink-soft">Enter your admin password to continue.</p>
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="field" autoComplete="email" aria-label="Admin email" required />
+              <input type="password" value={adminPw} onChange={(e) => setAdminPw(e.target.value)} placeholder="Admin password" className="field" autoComplete="current-password" aria-label="Admin password" autoFocus required />
+              <button disabled={pending} className="btn btn-brand w-full disabled:opacity-60">{pending ? "Checking…" : "Sign in as admin"}</button>
+              <p className="text-center text-sm text-ink-soft"><button type="button" onClick={() => go("start")} className="underline">← Back</button></p>
             </form>
           )}
 
-          {step === "verify" && (
-            <div className="mt-6 space-y-3 text-center text-sm text-ink-soft">
-              <p>We sent a {sent === "signup" ? "verification" : "sign-in"} link to <b className="text-ink">{email}</b>.</p>
-              <p>Open it to {sent === "signup" ? "activate your account and sign in" : "sign in"}. If you don&apos;t see it, check your spam folder.</p>
-              {/* A required popup can't be closed from here (that would be a way around it); offer to try another email instead. */}
-              {forced
-                ? <button onClick={() => go("start")} className="btn btn-brand mt-2">Use a different email</button>
-                : <button onClick={onClose} className="btn btn-brand mt-2">Got it</button>}
-            </div>
-          )}
-
           {step === "complete" && (
-            <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); run(() => completeProfileAction({ phone: f.phone, acceptTerms: terms, marketingConsent: marketing, firstName: f.firstName, lastName: f.lastName }), onDone); }}>
+            <form className="mt-6 space-y-3" onSubmit={(e) => { e.preventDefault(); run(async () => { const r = await completeProfileAction({ phone: f.phone, acceptTerms: terms, marketingConsent: marketing, firstName: f.firstName, lastName: f.lastName }); return r.ok ? { ok: true, next: "done" } : { ok: false, error: r.error }; }, route); }}>
               <p className="text-center text-sm text-ink-soft">Welcome{user?.firstName ? `, ${user.firstName}` : ""}! {user?.firstName ? "We just need your phone number" : "We just need your name and phone number"} so Arman can reach you about tours.</p>
               {!user?.firstName && (
                 <div className="grid grid-cols-2 gap-3">

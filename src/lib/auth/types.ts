@@ -19,13 +19,18 @@ export interface SignUpInput {
 
 export interface TourInput { mls: string; preferredTimes: string; message: string }
 
-export type AuthResult = { ok: true; needsVerification?: boolean; url?: string } | { ok: false; error: string };
+// needsPassword: this email is an admin email and must use the admin password. needsSignup: no account yet for this email.
+export type AuthResult = { ok: true; url?: string } | { ok: false; error: string; needsPassword?: boolean; needsSignup?: boolean };
 
 export interface AuthBackend {
   mode: "supabase" | "demo";
   signUp(i: SignUpInput, ctx: RequestCtx): Promise<AuthResult>;
-  /** Passwordless: emails a sign-in link (demo mode signs in immediately). */
+  /** Signs an existing visitor in with just their email (no email is sent). */
   signIn(email: string, ctx: RequestCtx): Promise<AuthResult>;
+  /** Admin only — the caller must already have verified the admin password. Creates the account if needed. */
+  signInAsAdmin(email: string, ctx: RequestCtx): Promise<AuthResult>;
+  countAdminFailures(ip: string | null, windowMs: number): Promise<number>;
+  recordAdminFailure(ctx: RequestCtx): Promise<void>;
   signOut(ctx: RequestCtx): Promise<void>;
   getUser(): Promise<AuthUser | null>;
   /** True if this email already has an account (used so returning visitors only type their email). */

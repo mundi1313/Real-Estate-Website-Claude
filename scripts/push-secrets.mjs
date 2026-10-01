@@ -17,12 +17,15 @@ for (const line of readFileSync(FILE, "utf8").split(/\r?\n/)) {
   const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
   if (m) env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, "$2").trim();
 }
-const KEYS = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "ADMIN_EMAILS", "RESEND_API_KEY", "ALERT_TO_EMAIL", "ALERT_FROM", "SITE_URL", "SITE_PASSWORD"];
+const KEYS = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "ADMIN_EMAILS", "RESEND_API_KEY", "ALERT_TO_EMAIL", "ALERT_FROM", "MAIL_FROM", "SITE_URL", "SITE_PASSWORD", "ADMIN_PASSWORD"];
 const secrets = Object.fromEntries(KEYS.filter((k) => env[k]).map((k) => [k, env[k]]));
 secrets.SITE_URL ||= "https://keystoedmonton.ca";
 
 const problems = [];
 for (const k of ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY", "ADMIN_EMAILS"]) if (!secrets[k]) problems.push(`${k} is empty in .env.local`);
+if (!secrets.ADMIN_PASSWORD) problems.push("ADMIN_PASSWORD is empty — without it nobody can open /admin on the live site");
+else if (secrets.ADMIN_PASSWORD.length < 10) problems.push("ADMIN_PASSWORD is too short — use at least 10 characters");
+if (secrets.ADMIN_PASSWORD && /^(password|admin|qwerty|letmein|welcome|123456)|^.{0,14}12345$/i.test(secrets.ADMIN_PASSWORD)) console.warn("WARNING: ADMIN_PASSWORD looks like a very common password. It protects every lead's personal information — please use a long, unique one.");
 if (!pub) {
   if (!secrets.SITE_PASSWORD) problems.push("SITE_PASSWORD is empty — add a long password to .env.local so the site stays private");
   else if (secrets.SITE_PASSWORD.length < 12) problems.push("SITE_PASSWORD is too short — use at least 12 characters (a few random words works well)");

@@ -1,12 +1,14 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { auth, requestCtx } from "@/lib/auth";
+import { clearAdminCookie, issueAdminCookie, verifyAdminPassword } from "@/lib/auth/admin-session";
 import { isEmail, normalizePhone } from "@/lib/auth/rules";
 import type { AuthResult } from "@/lib/auth/types";
+import { isAdmin, isAdminEmail } from "@/lib/crm/admin";
 import { scoreLead } from "@/lib/crm/score";
 import { crm } from "@/lib/crm/store";
 import { getProvider } from "@/lib/listings/provider";
-import { alertHotLead, alertNewLead, alertShowing } from "@/lib/notify";
+import { alertHotLead, alertNewLead, alertShowing, sendWelcome } from "@/lib/notify";
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 const fail = (error: string): AuthResult => ({ ok: false, error });
@@ -23,28 +25,68 @@ export async function signUpAction(f: {
   if (!isEmail(email)) return fail("Please enter a valid email address.");
   if (!phone) return fail("Please enter a valid 10-digit phone number.");
   if (!f.acceptTerms) return fail("Please agree to the Terms of Use and Privacy Policy to continue.");
+  // Admin emails can never be claimed or signed into without the admin password.
+  if (isAdminEmail(email)) return { ok: false, error: "Admin sign-in requires your password.", needsPassword: true };
+  const existed = await auth.emailExists(email);
   const res = await auth.signUp({ email, firstName, lastName, phone, marketingConsent: !!f.marketingConsent }, await requestCtx());
   revalidatePath("/", "layout");
-  if (res.ok) await alertNewLead({ id: "", firstName, lastName, email, phone }, "email", !res.needsVerification).catch(() => {});
+  if (res.ok && !existed) {
+    await alertNewLead({ id: "", firstName, lastName, email, phone }, "email").catch(() => {});
+    await sendWelcome({ email, firstName }).catch(() => {});
+  }
   return res;
 }
 
-// Lets the popup skip the "new account" form for people who already registered.
-// Trade-off: this reveals whether an email is registered with this site. Acceptable for a lead site; pair with Cloudflare rate limiting.
-export async function checkEmailAction(email: string): Promise<{ ok: boolean; exists: boolean }> {
-  if (!isEmail(str(email))) return { ok: false, exists: false };
-  return { ok: true, exists: await auth.emailExists(str(email)) };
+// Lets the popup skip the "new account" form for people who already registered, and ask admins for their password.
+// Trade-off: this reveals whether an email is registered (and which email is the admin's). Acceptable for a lead site;
+// pair with Cloudflare rate limiting.
+export async function checkEmailAction(email: string): Promise<{ ok: boolean; exists: boolean; admin: boolean }> {
+  if (!isEmail(str(email))) return { ok: false, exists: false, admin: false };
+  return { ok: true, exists: await auth.emailExists(str(email)), admin: isAdminEmail(str(email)) };
 }
 
 export async function signInAction(f: { email: string }): Promise<AuthResult> {
-  if (!isEmail(str(f.email))) return fail("Please enter a valid email address.");
-  const res = await auth.signIn(str(f.email), await requestCtx());
+  const email = str(f.email);
+  if (!isEmail(email)) return fail("Please enter a valid email address.");
+  if (isAdminEmail(email)) return { ok: false, error: "Admin sign-in requires your password.", needsPassword: true };
+  const res = await auth.signIn(email, await requestCtx());
   revalidatePath("/", "layout");
   return res;
+}
+
+// ---- admin: password + brute-force protection (5 failures per IP per 15 min, 30 per hour overall) ----
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+async function tooManyAdminFailures(ip: string | null) {
+  const [mine, all] = await Promise.all([auth.countAdminFailures(ip, 15 * 60_000), auth.countAdminFailures(null, 60 * 60_000)]);
+  return mine >= 5 || all >= 30;
+}
+
+export async function adminSignInAction(f: { email: string; password: string }): Promise<AuthResult> {
+  const email = str(f.email), ctx = await requestCtx();
+  const wrong = async () => { await delay(900); return fail("Incorrect email or password."); };
+  if (!isEmail(email) || !isAdminEmail(email) || !process.env.ADMIN_PASSWORD) return wrong();
+  if (await tooManyAdminFailures(ctx.ip)) return fail("Too many attempts. Please wait 15 minutes and try again.");
+  if (!(await verifyAdminPassword(f.password ?? ""))) { await auth.recordAdminFailure(ctx); return wrong(); }
+  const res = await auth.signInAsAdmin(email, ctx);
+  if (res.ok) { const u = await auth.getUser(); if (u) await issueAdminCookie(u.id); }
+  revalidatePath("/", "layout");
+  return res;
+}
+
+/** For an admin who is already signed in but has not entered the password in this browser (e.g. after Google sign-in). */
+export async function adminElevateAction(password: string): Promise<AuthResult> {
+  const user = await auth.getUser(), ctx = await requestCtx();
+  if (!user || !isAdmin(user)) return fail("Not allowed.");
+  if (await tooManyAdminFailures(ctx.ip)) return fail("Too many attempts. Please wait 15 minutes and try again.");
+  if (!(await verifyAdminPassword(password ?? ""))) { await auth.recordAdminFailure(ctx); await delay(900); return fail("Incorrect password."); }
+  await issueAdminCookie(user.id);
+  revalidatePath("/admin", "layout");
+  return { ok: true };
 }
 
 export async function signOutAction(): Promise<void> {
   await auth.signOut(await requestCtx());
+  await clearAdminCookie();
   revalidatePath("/", "layout");
 }
 
@@ -58,7 +100,10 @@ export async function completeProfileAction(f: { phone: string; acceptTerms: boo
   if (!f.acceptTerms) return fail("Please agree to the Terms of Use and Privacy Policy to continue.");
   const res = await auth.completeProfile({ phone, marketingConsent: !!f.marketingConsent, ...(user.firstName ? {} : { firstName, lastName }) }, await requestCtx());
   revalidatePath("/", "layout");
-  if (res.ok) await alertNewLead({ id: user.id, firstName: user.firstName || firstName, lastName: user.lastName || lastName, email: user.email, phone }, "link / Google").catch(() => {});
+  if (res.ok && !user.profileComplete) {
+    await alertNewLead({ id: user.id, firstName: user.firstName || firstName, lastName: user.lastName || lastName, email: user.email, phone }, "Google / sign-in").catch(() => {});
+    await sendWelcome({ email: user.email, firstName: user.firstName || firstName }).catch(() => {});
+  }
   return res;
 }
 

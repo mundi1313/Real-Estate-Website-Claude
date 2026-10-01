@@ -37,14 +37,14 @@ export default function AuthProvider({ user, mode, isAdmin = false, children }: 
     window.history.replaceState(null, "", window.location.pathname + (q ? `?${q}` : ""));
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (failed) { setNotice("Sign-in didn't complete. Please try again."); setModal({ step: "start", forced: false }); }
-    else if (user && !user.profileComplete) setModal({ step: "complete", forced: true });
-  }, [user]);
+    else if (user && !user.profileComplete && !isAdmin) setModal({ step: "complete", forced: true });
+  }, [user, isAdmin]);
 
   // Signed in but the profile is incomplete (e.g. Google, or a brand-new email): the missing details are required.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (user && !user.profileComplete) setModal((m) => m ?? { step: "complete", forced: true });
-  }, [user]);
+    if (user && !user.profileComplete && !isAdmin) setModal((m) => m ?? { step: "complete", forced: true });
+  }, [user, isAdmin]);
 
   const value = useMemo(() => ({ user, isAdmin, open }), [user, isAdmin, open]);
   return (

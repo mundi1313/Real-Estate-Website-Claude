@@ -13,7 +13,7 @@
 
 - Cloudflare deploy config (OpenNext adapter; verified building + serving under `wrangler dev`). See `docs/DEPLOY.md`.
 
-- Passwordless signup/login popup (Google + instant signup + trusted-device sign-in, emailed link only on a new browser), required (undismissable) popup on the first listing, one-tap tour booking from the profile, audit log, lead events, demo backend + Supabase backend. See `docs/AUTH_SETUP.md`.
+- Passwordless signup/login popup (Google + instant, email-free sign-up and sign-in; one welcome email; admin password + lockout), required (undismissable) popup on the first listing, one-tap tour booking from the profile, audit log, lead events, demo backend + Supabase backend. See `docs/AUTH_SETUP.md`.
 - Modern redesign (home, search, listing detail, mobile).
 
 - Admin CRM at `/admin`: overview, leads list/filters, lead profiles (timeline, notes, stage, consent), showings inbox, RAE CSV export, lead scoring. Admin-only via `ADMIN_EMAILS`; every page/action/route re-checks (layout check alone leaks data — see `adminGate`).

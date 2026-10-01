@@ -10,9 +10,9 @@ import { useAuth } from "./AuthProvider";
 const lastSent = new Map<string, number>();
 
 export default function AuthGate({ mls }: { mls: string }) {
-  const { user, open } = useAuth();
+  const { user, open, isAdmin } = useAuth();
   const signedIn = !!user;
-  const needsProfile = signedIn && !user!.profileComplete;
+  const needsProfile = signedIn && !user!.profileComplete && !isAdmin; // the admin is not a lead
   useEffect(() => {
     if (signedIn) {
       if (needsProfile) open("complete", true);

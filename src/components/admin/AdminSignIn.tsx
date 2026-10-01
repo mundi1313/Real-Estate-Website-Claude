@@ -7,7 +7,7 @@ export default function AdminSignIn() {
     <div className="container-x py-24 text-center">
       <h1 className="text-3xl font-semibold">Private area</h1>
       <p className="mt-2 text-ink-soft">Sign in to continue.</p>
-      <button onClick={() => open("login")} className="btn btn-brand mt-6">Sign in</button>
+      <button onClick={() => open("start")} className="btn btn-brand mt-6">Sign in</button>
     </div>
   );
 }
